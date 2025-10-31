@@ -11,7 +11,7 @@
     "engines": {
     "node": ">=20.0.0"
   },
-  "dependencies": {
+"dependencies": {
     "@adiwajshing/keyed-db": "^0.2.4",
     "@vreden/youtube_scraper": "^1.2.7",
     "@whiskeysockets/baileys": "latest",
@@ -50,7 +50,7 @@
     "@napi-rs/canvas": "^0.1.70",
     "googlethis": "^1.8.0",
     "mime-types": "^3.0.1",
-    "sharp": "^0.30.7",
+    "sharp": "^0.32.6",
     "form-data": "^4.0.2",
     "openai": "^4.98.0",
     "tesseract.js": "^6.0.1",
@@ -67,13 +67,24 @@
     "file-type": "^16.5.3",
     "wikipedia": "^2.1.2",
     "google-it": "^1.6.4",
-    "jimp": "^0.16.1",
+    "jimp": "^1.6.0",
     "@sl-code-lords/movie-dl": "^1.1.1",
     "@mrnima/tiktok-downloader": "^1.0.0",
     "ruhend-scraper": "^9.0.1",
     "youtube-playlist": "^1.0.4",
     "ytdl-core": "^4.11.5",
-    "@dark-yasiya/yt-dl.js": "^1.0.5"
+    "@dark-yasiya/yt-dl.js": "^1.0.5",
+    "he": "^1.2.0",
+    "@mrnima/facebook-downloader": "^1.0.0",
+    "@bochilteam/scraper-mediafire": "^5.0.0",
+    "cloudscraper": "^4.6.0",
+    "@dark-yasiya/scrap": "^1.0.1",
+    "qrcode": "^1.5.4",
+    "btch-downloader": "^4.1.27-lts",
+    "node-cache": "^5.1.2",
+    "@raphaelvserafim/google-drive-downloader": "^1.0.3",
+    "stream": "^0.0.3",
+    "webtorrent": "^2.8.4"
       },
   "resolutions": {
     "libsignal-node": "https://github.com/adiwajshing/libsignal-node"
