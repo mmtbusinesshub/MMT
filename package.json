@@ -14,7 +14,7 @@
   "dependencies": {
     "@adiwajshing/keyed-db": "^0.2.4",
     "@vreden/youtube_scraper": "^1.2.7",
-    "@whiskeysockets/baileys": "^6.7.18",
+    "@whiskeysockets/baileys": "latest",
     "@xaviabot/fb-downloader": "^1.0.14",
     "api-dylux": "^1.8.5",
     "axios": "^1.9.0",
@@ -67,7 +67,7 @@
     "file-type": "^16.5.3",
     "wikipedia": "^2.1.2",
     "google-it": "^1.6.4",
-    "jimp": "^0.16.1",
+    "jimp": "^1.6.0",
     "@sl-code-lords/movie-dl": "^1.1.1",
     "@mrnima/tiktok-downloader": "^1.0.0",
     "ruhend-scraper": "^9.0.1",
