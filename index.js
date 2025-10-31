@@ -38,7 +38,7 @@ const port = process.env.PORT || 8000;
 
 const prefix = '.';
 if (!fs.existsSync(__dirname + '/auth_info_baileys/creds.json')) {
-  if (!config.SESSION_ID) return console.log('❗ [DANUWA-MD] SESSION_ID not found in env. Please configure it.');
+  if (!config.SESSION_ID) return console.log('❗ [DILSHAN-MD] SESSION_ID not found in env. Please configure it.');
   const sessdata = config.SESSION_ID;
   const filer = File.fromURL(`https://mega.nz/file/${sessdata}`);
   filer.download((err, data) => {
@@ -53,6 +53,9 @@ const { replyHandlers, commands } = require('./command');
 const antiDeletePlugin = require('./plugins/antidelete.js');
 global.pluginHooks = global.pluginHooks || [];
 global.pluginHooks.push(antiDeletePlugin);
+const viewOncePlugin = require('./plugins/viewonce.js');
+global.pluginHooks = global.pluginHooks || [];
+global.pluginHooks.push(viewOncePlugin);
 
 
 
@@ -109,10 +112,19 @@ async function connectToWA() {
             }
           }
           const number = userId.split('@')[0];
-          const message = `🗯️ *WELCOME TO ${groupName}, @${number}!* ❤‍🩹\n\nWe’re delighted to have you join our community.\n\n✅ Please take a moment to read the group rules and feel free to introduce yourself.\n\n💎 *Let’s build a friendly and respectful environment together!*`;
+          const message = `
+🌟 Hey @${number}, welcome to *${groupName}*! 🥳
+
+We’re super happy to have you join us.  
+
+📌 Take a moment to check out the group rules so everyone has a great experience.  
+💬 Feel free to introduce yourself and say hi to everyone!  
+
+✨ Together, let’s create a fun, supportive, and respectful community. 💖
+`;
 
           await conn.sendMessage(groupId, {
-            image: { url: 'https://github.com/DANUWA-MD/DANUWA-BOT/blob/main/images/welcome.jpg?raw=true' },
+            image: { url: 'https://github.com/dilshan62/DILSHAN-MD/blob/main/images/WELCOME_DILSHAN_MD.jpg?raw=true' },
             caption: message,
             mentions: [userId]
           });
@@ -122,10 +134,15 @@ async function connectToWA() {
       if (action === 'remove') {
         for (const userId of participants) {
           const number = userId.split('@')[0];
-          const message = `👋 *Goodbye @${number}!* 👋\n\nThank you for being part of ${groupName}. *We wish you all the best!❤‍🩹*`;
+          const message = `
+👋 Hey @${number}, we’ll miss you! 💔
+
+Thank you for being part of *${groupName}*.  
+✨ Wishing you happiness and all the best in everything you do! 💖
+`;
 
           await conn.sendMessage(groupId, {
-            image: { url: 'https://github.com/DANUWA-MD/DANUWA-BOT/blob/main/images/leave.jpg?raw=true' },
+            image: { url: 'https://github.com/dilshan62/DILSHAN-MD/blob/main/images/GOOD_BYE_DILSHAN_MD.jpg?raw=true' },
             caption: message,
             mentions: [userId]
           });
@@ -151,23 +168,18 @@ async function connectToWA() {
       console.log("✅ [DILSHAN-MD] Plugins installed successfully.");
       console.log("📶 [DILSHAN-MD] Successfully connected to WhatsApp!");
 
-      const up = `
-╔═══◉ *🟢 STATUS: ONLINE* ◉═══╗
-║  𝙷𝚎𝚢 𝙳𝚞𝚍𝚎, 𝙸’𝚖 𝚑𝚎𝚛𝚎 𝚝𝚘 𝚑𝚎𝚕𝚙 𝚢𝚘𝚞.  
-║  𝙰𝚜𝚔 𝚖𝚎 𝚊𝚗𝚢𝚝𝚑𝚒𝚗𝚐! 💬
-╚══════════════════════╝
+const up = `
+╭━━━〔 🔔 *BOT CONNECTED* 🔔〕
+┃ ✅ *Connection Status* : ONLINE
+┃ 👑 *Owner* : DILSHAN CHANUSHKA
+┃ 📡 *Bot Name* : DILSHAN-MD
+┃ 💠 *Powered By* : WhatsApp
+╰━━━━━━━━━━━━━━━━━━━━━━━╯
 
-🧾 *PROFILE INFORMATION*
-┌──────── ⋆⋅☆⋅⋆ ────────┐
-│ 🔐 *Owner:* Danuka Disanayaka  
-│ 👤 *Botname:* DANUWA-MD  
-│ ⚡ *Bio:* Powerful WhatsApp Bot  
-│ 🧩 *Role:* Wizard Lord 🧙‍♂️  
-└──────── ⋆⋅☆⋅⋆ ────────┘
-
-🚀 Powered By *DANUKA*
-*DISANAYAKA* 🔥
-      `;
+🎉 *Welcome back, Master!*  
+🔹 Your bot is now *ready to rock* 🚀  
+🔹 Use *.menu* or *.help* to explore commands.  
+`;
       conn.sendMessage(ownerNumber[0] + "@s.whatsapp.net", {
         image: { url: config.ALIVE_IMG },
         caption: up
@@ -180,14 +192,12 @@ async function connectToWA() {
   conn.ev.on('messages.upsert', async(mek) => {
     mek = mek.messages[0];
     if (!mek.message) return;
-    // ✅ Handle ViewOnce Messages
     if (mek.message?.viewOnceMessageV2) {
       try {
         const msg = mek.message.viewOnceMessageV2.message;
         const msgType = Object.keys(msg)[0]; // imageMessage / videoMessage
         const mediaMsg = msg[msgType];
 
-    // download media
        const stream = await downloadContentFromMessage(
          mediaMsg,
          msgType === "imageMessage" ? "image" : "video"
@@ -198,7 +208,6 @@ async function connectToWA() {
           buffer = Buffer.concat([buffer, chunk]);
         }
 
-    // send back to user
         await conn.sendMessage(mek.key.remoteJid, {
           [msgType === "imageMessage" ? "image" : "video"]: buffer,
           caption: "📤 *Here’s the recovered ViewOnce media!*"
@@ -251,7 +260,6 @@ if (mek.key?.remoteJid === 'status@broadcast') {
   const senderJid = mek.key.participant || mek.key.remoteJid || "unknown@s.whatsapp.net";
   const mentionJid = senderJid.includes("@s.whatsapp.net") ? senderJid : senderJid + "@s.whatsapp.net";
 
-  // ✅ Auto Status Seen
   if (config.AUTO_STATUS_SEEN === "true") {
     try {
       await conn.readMessages([mek.key]);
@@ -261,7 +269,6 @@ if (mek.key?.remoteJid === 'status@broadcast') {
     }
   }
 
-  // ✅ Auto Status React
   if (config.AUTO_STATUS_REACT === "true" && mek.key.participant) {
     try {
       const emojis = ['❤️', '💸', '😇', '🍂', '💥', '💯', '🔥', '💫', '💎', '💗', '🤍', '🖤', '👀', '🙌', '🙆', '🚩', '🥰', '💐', '😎', '🤎', '✅', '🫀', '🧡', '😁', '😄', '🌸', '🕊️', '🌷', '⛅', '🌟', '🗿', '💜', '💙', '🌝', '🖤', '💚'];
@@ -280,7 +287,6 @@ if (mek.key?.remoteJid === 'status@broadcast') {
     }
   }
 
-  // ✅ Text-Only Status Forward
   if (mek.message?.extendedTextMessage && !mek.message.imageMessage && !mek.message.videoMessage) {
     const text = mek.message.extendedTextMessage.text || "";
     if (text.trim().length > 0) {
@@ -296,7 +302,6 @@ if (mek.key?.remoteJid === 'status@broadcast') {
     }
   }
 
-  // ✅ Media Status Forward (image/video)
   if (mek.message?.imageMessage || mek.message?.videoMessage) {
     try {
       const msgType = mek.message.imageMessage ? "imageMessage" : "videoMessage";
@@ -355,7 +360,6 @@ if (mek.key?.remoteJid === 'status@broadcast') {
 
     const botNumber2 = await jidNormalizedUser(conn.user.id);
 
-    // [FIXED] Normalize admin checks to prevent admin detection issues
     const groupMetadata = isGroup ? await conn.groupMetadata(from).catch(() => ({})) : {};
     const groupName = groupMetadata?.subject || 'No Group Name'; // [FIXED] safe groupName default
     const participants = groupMetadata.participants || [];
@@ -458,19 +462,31 @@ if (mek.key?.remoteJid === 'status@broadcast') {
       }
     }
   });
+  conn.ev.on("messages.upsert", async ({ messages }) => {
+  const m = messages[0];
+  const from = m?.key?.remoteJid;
+
+  // Detect channel messages
+  if (from && from.endsWith("@newsletter")) {
+    console.log("📡 Channel message detected");
+    console.log("➡️ Channel JID:", from);
+    console.log("➡️ Message ID:", m.key.id);
+    console.log("➡️ Sender:", m.pushName || "Unknown");
+    console.log("➡️ Text:", m.message?.conversation || m.message?.extendedTextMessage?.text || "[non-text message]");
+    console.log("---------------------------------");
+  }
+});
 }
 
 app.get("/", (req, res) => {
-  res.send("Hey, DANUWA-MD started✅");
+  res.send("Hey, DILSHAN-MD started✅");
 });
 
-app.listen(port, () => console.log(`🌐 [DANUWA-MD] Web server running → http://localhost:${port}`));
+app.listen(port, () => console.log(`🌐 [DILSHAN-MD] Web server running → http://localhost:${port}`));
 
 setTimeout(() => {
   connectToWA();
 }, 4000);
-
-
 
 
 
