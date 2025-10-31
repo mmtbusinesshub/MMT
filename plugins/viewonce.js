@@ -8,22 +8,34 @@ module.exports = {
 
       console.log('\n🧩 DEBUG: Raw message keys =>', Object.keys(mek.message));
 
-      // Save full raw message object to a JSON file (overwrites each time)
+      // Save full raw message object for analysis
       fs.writeFileSync(
         'debug_last_message.json',
         JSON.stringify(mek.message, null, 2)
       );
 
-      // Log view-once related structures if any
-      if (mek.message.viewOnceMessageV2)
-        console.log('📸 Found: viewOnceMessageV2');
-      if (mek.message.viewOnceMessageV2Extension)
-        console.log('📸 Found: viewOnceMessageV2Extension');
-      if (mek.message.ephemeralMessage)
-        console.log(
-          '🕓 Found: ephemeralMessage =>',
-          Object.keys(mek.message.ephemeralMessage.message || {})
-        );
+      // 🔍 Function to recursively unwrap message layers
+      const unwrapMessage = (msg) => {
+        if (!msg) return msg;
+        if (msg.ephemeralMessage) return unwrapMessage(msg.ephemeralMessage.message);
+        if (msg.viewOnceMessageV2) return unwrapMessage(msg.viewOnceMessageV2.message);
+        if (msg.viewOnceMessageV2Extension)
+          return unwrapMessage(msg.viewOnceMessageV2Extension.message);
+        return msg;
+      };
+
+      // Unwrap the actual content
+      const realMsg = unwrapMessage(mek.message);
+
+      // 🔎 Now check the real message
+      if (realMsg.imageMessage) {
+        console.log('📸 Found: View Once IMAGE');
+      } else if (realMsg.videoMessage) {
+        console.log('🎥 Found: View Once VIDEO');
+      } else {
+        console.log('⚪ No view-once media found in this message.');
+      }
+
     } catch (err) {
       console.error('❌ Debug plugin error:', err);
     }
