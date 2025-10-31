@@ -1,56 +1,31 @@
-const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
+const fs = require('fs');
 
 module.exports = {
-  name: 'viewonce_fix',
+  name: 'viewonce',
   onMessage: async (conn, mek) => {
     try {
-      let viewOnceMsg;
+      if (!mek.message) return;
 
-      // 🧩 Case 1: direct viewOnce message
-      if (mek.message?.viewOnceMessageV2 || mek.message?.viewOnceMessageV2Extension) {
-        viewOnceMsg = mek.message.viewOnceMessageV2 || mek.message.viewOnceMessageV2Extension;
-      }
+      console.log('\n🧩 DEBUG: Raw message keys =>', Object.keys(mek.message));
 
-      // 🧩 Case 2: wrapped inside ephemeral message
-      else if (mek.message?.ephemeralMessage?.message?.viewOnceMessageV2 ||
-               mek.message?.ephemeralMessage?.message?.viewOnceMessageV2Extension) {
-        viewOnceMsg =
-          mek.message.ephemeralMessage.message.viewOnceMessageV2 ||
-          mek.message.ephemeralMessage.message.viewOnceMessageV2Extension;
-      }
-
-      if (!viewOnceMsg) return; // not a view-once message
-
-      // Extract actual media
-      const innerMsg = viewOnceMsg.message;
-      const type = Object.keys(innerMsg || {})[0];
-      const mediaMsg = innerMsg[type];
-      if (!mediaMsg) return;
-
-      // Download media
-      const stream = await downloadContentFromMessage(
-        mediaMsg,
-        type === 'imageMessage' ? 'image' : 'video'
+      // Save full raw message object to a JSON file (overwrites each time)
+      fs.writeFileSync(
+        'debug_last_message.json',
+        JSON.stringify(mek.message, null, 2)
       );
 
-      let buffer = Buffer.from([]);
-      for await (const chunk of stream) buffer = Buffer.concat([buffer, chunk]);
-
-      // Send recovered image or video back to chat
-      await conn.sendMessage(
-        mek.key.remoteJid,
-        {
-          [type === 'imageMessage' ? 'image' : 'video']: buffer,
-          caption: `📤 *Recovered ViewOnce ${
-            type === 'imageMessage' ? 'Photo' : 'Video'
-          }!*`,
-        },
-        { quoted: mek }
-      );
-
-      console.log(`✅ ViewOnce recovered from ${mek.key.remoteJid}`);
+      // Log view-once related structures if any
+      if (mek.message.viewOnceMessageV2)
+        console.log('📸 Found: viewOnceMessageV2');
+      if (mek.message.viewOnceMessageV2Extension)
+        console.log('📸 Found: viewOnceMessageV2Extension');
+      if (mek.message.ephemeralMessage)
+        console.log(
+          '🕓 Found: ephemeralMessage =>',
+          Object.keys(mek.message.ephemeralMessage.message || {})
+        );
     } catch (err) {
-      console.error('❌ Error recovering view-once:', err);
+      console.error('❌ Debug plugin error:', err);
     }
   },
 };
