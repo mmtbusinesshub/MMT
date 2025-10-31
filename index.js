@@ -53,9 +53,6 @@ const { replyHandlers, commands } = require('./command');
 const antiDeletePlugin = require('./plugins/antidelete.js');
 global.pluginHooks = global.pluginHooks || [];
 global.pluginHooks.push(antiDeletePlugin);
-const viewOncePlugin = require('./plugins/viewonce.js');
-global.pluginHooks = global.pluginHooks || [];
-global.pluginHooks.push(viewOncePlugin);
 
 
 
@@ -472,6 +469,7 @@ app.listen(port, () => console.log(`🌐 [DANUWA-MD] Web server running → http
 setTimeout(() => {
   connectToWA();
 }, 4000);
+
 
 
 
