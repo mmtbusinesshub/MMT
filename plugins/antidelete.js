@@ -59,14 +59,15 @@ module.exports = {
 
 
       try {
-        let caption = `┏━━ 🚨 *DILSHAN-MD Alert* ━━┓
+        let caption = `
+┏━━ 🚨 *MMT Alert* ━━┓
 
 👤 *Sender:* @${sender.split('@')[0]}
 🕒 *Time:* ${new Date().toLocaleString()}
 
 ⚠️ Deleted message has been successfully *recovered*.
 
-✅ Service: *DILSHAN-MD WhatsApp Assistant*
+✅ Service: *MMT Business Hub WhatsApp Assistant*
 
 ┗━━━━━━━━━━━━━━━━━━━━┛`;
 
