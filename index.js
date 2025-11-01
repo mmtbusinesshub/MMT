@@ -205,6 +205,27 @@ const up = `
       }
     }
 
+    // Handle viewOnce media buffers specifically
+if (mek.message?.viewOnceMessageV2 || mek.message?.viewOnceMessage) {
+  try {
+    const viewOnceContent = mek.message.viewOnceMessageV2 || mek.message.viewOnceMessage;
+    const actualMessage = viewOnceContent.message;
+    const mediaType = Object.keys(actualMessage)[0];
+    const mediaData = actualMessage[mediaType];
+    
+    if (mediaData) {
+      const stream = await downloadContentFromMessage(mediaData, mediaType.replace('Message', ''));
+      const buffer = [];
+      for await (const chunk of stream) buffer.push(chunk);
+      mek._mediaBuffer = Buffer.concat(buffer);
+      mek._mediaType = mediaType;
+      console.log(`✅ Pre-downloaded viewOnce ${mediaType} buffer`);
+    }
+  } catch (err) {
+    console.log('❌ Failed to pre-download viewOnce media:', err.message);
+  }
+}
+
     // Run plugins onMessage hooks
     if (global.pluginHooks) {
       for (const plugin of global.pluginHooks) {
@@ -459,6 +480,7 @@ app.listen(port, () => console.log(`🌐 [DILSHAN-MD] Web server running → htt
 setTimeout(() => {
   connectToWA();
 }, 4000);
+
 
 
 
