@@ -1,10 +1,11 @@
-// ai-autoreply plugin (works automatically like antidelete)
+// plugins/ai-autoreply.js
 module.exports = {
-  onMessage: async (conn, msg) => {
-    const key = msg.key;
-    const content = msg.message;
-    if (!content || key.fromMe) return; // ignore own messages
+  onMessage: async (conn, mek) => {
+    const key = mek.key;
+    const content = mek.message;
+    if (!content || key.fromMe) return;
 
+    // Extract text from all possible types
     let text =
       content.conversation ||
       content.extendedTextMessage?.text ||
@@ -17,7 +18,7 @@ module.exports = {
     const lower = text.toLowerCase();
     const from = key.remoteJid;
 
-    // ===== Keyword-based replies =====
+    // List of keywords and replies
     const replies = [
       { keywords: ["price", "pricing", "cost"], reply: "Our pricing starts from Rs. 2500 depending on your package. Would you like details?" },
       { keywords: ["location", "address"], reply: "We are located in Colombo, Sri Lanka 🇱🇰. You can visit or order online!" },
@@ -28,7 +29,7 @@ module.exports = {
       { keywords: ["service", "product"], reply: "We offer a variety of services and products. Could you please specify which one you are interested in?" },
     ];
 
-    // send matching reply
+    // Send matching reply
     for (let item of replies) {
       if (item.keywords.some(k => lower.includes(k))) {
         await conn.sendMessage(from, { text: item.reply });
@@ -36,7 +37,7 @@ module.exports = {
       }
     }
 
-    // fallback reply
+    // Optional fallback
     await conn.sendMessage(from, { text: "Thanks for your message! We will get back to you shortly." });
   }
 };
