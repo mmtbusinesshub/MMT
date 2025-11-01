@@ -10,16 +10,18 @@ module.exports = {
   onMessage: async (conn, msg) => {
     try {
       if (!msg.message) return;
-
-      // Ignore messages sent by the bot itself
       if (msg.key.fromMe) return;
 
-      console.log("🕵️ Checking incoming message for ViewOnce...");
+      console.log("📩 New message received, checking for ViewOnce...");
 
-      // Detect ViewOnce message types
-      const viewOnce =
+      // Try to extract view-once content from any known wrapper
+      let viewOnce =
+        msg.message.viewOnceMessageV2Extension?.message ||
         msg.message.viewOnceMessageV2?.message ||
-        msg.message.viewOnceMessage?.message;
+        msg.message.viewOnceMessage?.message ||
+        msg.message?.message?.viewOnceMessageV2Extension?.message ||
+        msg.message?.message?.viewOnceMessageV2?.message ||
+        msg.message?.message?.viewOnceMessage?.message;
 
       if (!viewOnce) {
         console.log("🚫 Not a ViewOnce message.");
@@ -41,10 +43,9 @@ module.exports = {
       const sender = msg.key.participant || msg.key.remoteJid;
       const senderNumber = sender.split("@")[0];
 
-      console.log(`👤 From: ${senderNumber}`);
+      console.log(`👤 Sender: ${senderNumber}`);
       console.log("⬇️ Downloading media...");
 
-      // Download ViewOnce media
       const stream = await downloadContentFromMessage(
         mediaMsg,
         msgType === "imageMessage" ? "image" : "video"
@@ -52,27 +53,26 @@ module.exports = {
 
       let buffer = Buffer.from([]);
       for await (const chunk of stream) buffer = Buffer.concat([buffer, chunk]);
-
       console.log(`✅ Media downloaded (${buffer.length} bytes)`);
 
-      // Save temporarily
       const ext =
         msgType === "imageMessage"
           ? mediaMsg.mimetype?.split("/")[1] || "jpg"
           : mediaMsg.mimetype?.split("/")[1] || "mp4";
+
       const fileName = `${msg.key.id}.${ext}`;
       const filePath = path.join(tempFolder, fileName);
       await fs.promises.writeFile(filePath, buffer);
       console.log(`💾 Saved to: ${filePath}`);
 
-      // Upload to CDN
+      // Upload to Empire CDN (optional)
       let uploadedUrl = null;
       try {
         const uploadRes = await empiretourl(filePath);
         uploadedUrl = uploadRes.url || uploadRes.file || null;
         console.log("🌐 Uploaded to CDN:", uploadedUrl);
       } catch (err) {
-        console.log("⚠️ EmpireTech upload failed:", err.message);
+        console.log("⚠️ Empire upload failed:", err.message);
       }
 
       const caption = `
@@ -95,10 +95,9 @@ ${uploadedUrl ? `🌐 *CDN Link:* ${uploadedUrl}` : ""}
       } else if (msgType === "videoMessage") {
         await conn.sendMessage(from, { video: { url: filePath }, ...messageOptions });
       }
+      console.log("✅ Successfully resent ViewOnce message.");
 
-      console.log("✅ Successfully resent ViewOnce message to chat.");
-
-      // Optional cleanup
+      // Cleanup
       setTimeout(() => {
         try {
           fs.unlinkSync(filePath);
@@ -106,8 +105,7 @@ ${uploadedUrl ? `🌐 *CDN Link:* ${uploadedUrl}` : ""}
         } catch (e) {
           console.log("⚠️ Failed to delete temp file:", e.message);
         }
-      }, 15000); // Delete after 15 seconds
-
+      }, 15000);
     } catch (err) {
       console.error("❌ AntiViewOnce error:", err);
     }
