@@ -1,93 +1,122 @@
-const { downloadContentFromMessage, getContentType } = require('@whiskeysockets/baileys');
+const { downloadContentFromMessage, getContentType, proto } = require('@whiskeysockets/baileys');
 const fs = require('fs');
 const path = require('path');
 
-// Store to track processed viewOnce messages to avoid duplicates
-const processedViewOnceMessages = new Set();
-
 module.exports = {
-  onMessage: async (conn, msg) => {
-    try {
-      // Check if it's a viewOnce message
-      if (msg.message?.viewOnceMessage || msg.message?.viewOnceMessageV2) {
-        const messageId = msg.key.id;
-        
-        // Avoid processing the same message multiple times
-        if (processedViewOnceMessages.has(messageId)) {
-          return;
-        }
-        processedViewOnceMessages.add(messageId);
-
-        const from = msg.key.remoteJid;
-        const sender = msg.key.participant || from;
-        
-        // Extract the actual media message from viewOnce wrapper
-        const viewOnceContent = msg.message.viewOnceMessage || msg.message.viewOnceMessageV2;
-        const actualMessage = viewOnceContent.message;
-        const mediaType = getContentType(actualMessage);
-        
-        if (!['imageMessage', 'videoMessage'].includes(mediaType)) {
-          return; // Only handle images and videos
-        }
-
-        const mediaMessage = actualMessage[mediaType];
-        
+    onMessage: async (conn, mek) => {
         try {
-          // Download the media
-          const stream = await downloadContentFromMessage(
-            mediaMessage,
-            mediaType === 'imageMessage' ? 'image' : 'video'
-          );
+            if (!mek.message) return;
+            
+            // Check for viewOnce messages
+            const viewOnceTypes = ['viewOnceMessage', 'viewOnceMessageV2', 'viewOnceMessageV2Extension'];
+            let viewOnceType = null;
+            let viewOnceContent = null;
 
-          let buffer = Buffer.from([]);
-          for await (const chunk of stream) {
-            buffer = Buffer.concat([buffer, chunk]);
-          }
+            for (const type of viewOnceTypes) {
+                if (mek.message[type]) {
+                    viewOnceType = type;
+                    viewOnceContent = mek.message[type];
+                    break;
+                }
+            }
 
-          // Prepare caption with info
-          const caption = `📤 *ViewOnce Media Recovered*\n\n👤 *From:* @${sender.split('@')[0]}\n🕒 *Time:* ${new Date().toLocaleString()}\n📁 *Type:* ${mediaType === 'imageMessage' ? 'Image' : 'Video'}\n\n✅ *Recovered by DILSHAN-MD AntiViewOnce*`;
+            if (!viewOnceContent) return;
 
-          // Send the recovered media back
-          if (mediaType === 'imageMessage') {
-            await conn.sendMessage(from, {
-              image: buffer,
-              caption: caption,
-              mentions: [sender]
-            }, { quoted: msg });
-          } else if (mediaType === 'videoMessage') {
-            await conn.sendMessage(from, {
-              video: buffer,
-              caption: caption,
-              mentions: [sender]
-            }, { quoted: msg });
-          }
+            console.log(`🔍 ViewOnce detected: ${viewOnceType}`);
 
-          console.log(`✅ ViewOnce media recovered from ${sender}`);
+            const from = mek.key.remoteJid;
+            const sender = mek.key.participant || from;
+            const botJid = conn.user.id;
 
-          // Clean up: remove from processed set after 5 minutes to free memory
-          setTimeout(() => {
-            processedViewOnceMessages.delete(messageId);
-          }, 5 * 60 * 1000);
+            // Don't process if the message is from the bot itself
+            if (mek.key.fromMe) return;
 
-        } catch (downloadError) {
-          console.error('❌ Error downloading viewOnce media:', downloadError);
-          await conn.sendMessage(from, {
-            text: `❌ Failed to recover ViewOnce media\n\nError: ${downloadError.message}`
-          }, { quoted: msg });
+            try {
+                // Extract the actual media message
+                const actualMessage = viewOnceContent.message;
+                if (!actualMessage) {
+                    console.log('❌ No actual message found in viewOnce');
+                    return;
+                }
+
+                const mediaType = getContentType(actualMessage);
+                console.log(`📁 Media type: ${mediaType}`);
+
+                if (!['imageMessage', 'videoMessage'].includes(mediaType)) {
+                    console.log('❌ Not an image or video viewOnce');
+                    return;
+                }
+
+                const mediaMsg = actualMessage[mediaType];
+                if (!mediaMsg) {
+                    console.log('❌ No media message found');
+                    return;
+                }
+
+                // Download the media
+                const mediaKind = mediaType === 'imageMessage' ? 'image' : 'video';
+                console.log(`⬇️ Downloading ${mediaKind}...`);
+
+                const stream = await downloadContentFromMessage(mediaMsg, mediaKind);
+                
+                let buffer = Buffer.from([]);
+                for await (const chunk of stream) {
+                    buffer = Buffer.concat([buffer, chunk]);
+                }
+
+                console.log(`✅ Downloaded ${buffer.length} bytes`);
+
+                // Create caption
+                const caption = `📤 *ViewOnce Media Recovered*\n\n👤 *From:* @${sender.split('@')[0]}\n🕒 *Time:* ${new Date().toLocaleString()}\n📁 *Type:* ${mediaType === 'imageMessage' ? 'Image' : 'Video'}\n\n✨ *Recovered by DILSHAN-MD*`;
+
+                // Send the recovered media back to the sender
+                const sendOptions = {
+                    mentions: [sender]
+                };
+
+                if (mediaType === 'imageMessage') {
+                    await conn.sendMessage(from, {
+                        image: buffer,
+                        caption: caption,
+                        ...sendOptions
+                    });
+                    console.log(`✅ ViewOnce image sent back to ${sender}`);
+                } else if (mediaType === 'videoMessage') {
+                    await conn.sendMessage(from, {
+                        video: buffer,
+                        caption: caption,
+                        ...sendOptions
+                    });
+                    console.log(`✅ ViewOnce video sent back to ${sender}`);
+                }
+
+                // Also send confirmation to bot owner
+                const ownerMsg = `🔔 *ViewOnce Alert*\n\n👤 From: @${sender.split('@')[0]}\n💬 Chat: ${from}\n📁 Type: ${mediaType === 'imageMessage' ? 'Image' : 'Video'}\n✅ Auto-recovered successfully`;
+                
+                try {
+                    await conn.sendMessage(conn.user.id.split(':')[0] + '@s.whatsapp.net', {
+                        text: ownerMsg,
+                        mentions: [sender]
+                    });
+                } catch (ownerErr) {
+                    console.log('⚠️ Could not notify owner:', ownerErr.message);
+                }
+
+            } catch (downloadError) {
+                console.error('❌ Error processing viewOnce:', downloadError);
+                
+                // Send error message to user
+                try {
+                    await conn.sendMessage(from, {
+                        text: `❌ Failed to recover ViewOnce media\n\nError: ${downloadError.message}\n\nPlease try sending again or contact the bot owner.`
+                    });
+                } catch (sendError) {
+                    console.error('❌ Could not send error message:', sendError);
+                }
+            }
+
+        } catch (error) {
+            console.error('❌ Critical error in antiviewonce plugin:', error);
         }
-      }
-    } catch (error) {
-      console.error('❌ Error in antiviewonce plugin:', error);
     }
-  },
-
-  // Optional: Cleanup function to prevent memory leaks
-  onDelete: async (conn, updates) => {
-    // Clean up processed messages when they're deleted
-    for (const update of updates) {
-      if (update.key?.id) {
-        processedViewOnceMessages.delete(update.key.id);
-      }
-    }
-  }
 };
