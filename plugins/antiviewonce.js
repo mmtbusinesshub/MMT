@@ -2,55 +2,46 @@ const fs = require('fs');
 const path = require('path');
 
 let viewOnceMessages = {};
-let viewOnceMediaPath = {};
 
 const tempFolder = path.join(__dirname, '../temp');
 if (!fs.existsSync(tempFolder)) fs.mkdirSync(tempFolder, { recursive: true });
 
 module.exports = {
   onMessage: async (conn, msg) => {
-    const key = msg.key;
-    const content = msg.message;
-    if (!content || key.fromMe) return;
+    try {
+      const key = msg.key;
+      const content = msg.message;
+      
+      if (!content || key.fromMe) return;
 
-    // Check if it's a viewOnce message
-    const isViewOnce = content.viewOnceMessage || content.viewOnceMessageV2;
-    if (!isViewOnce) return;
+      // Check if it's a viewOnce message
+      const isViewOnce = content.viewOnceMessage || content.viewOnceMessageV2;
+      if (!isViewOnce) return;
 
-    console.log('🔍 ViewOnce message detected');
+      console.log('🔍 ViewOnce message detected from:', key.remoteJid);
 
-    // Save viewOnce message for processing
-    viewOnceMessages[key.id] = { key, message: content };
+      // Store the viewOnce message data
+      viewOnceMessages[key.id] = {
+        key: key,
+        message: content,
+        timestamp: Date.now(),
+        sender: key.participant || key.remoteJid
+      };
 
-    // If media buffer is already available, save it
-    if (msg._mediaBuffer && msg._mediaType) {
-      let ext = '.bin';
-      if (msg._mediaType === 'imageMessage') ext = '.jpg';
-      else if (msg._mediaType === 'videoMessage') ext = '.mp4';
-      else if (msg._mediaType === 'audioMessage') ext = '.ogg';
-      else if (msg._mediaType === 'stickerMessage') ext = '.webp';
-      else if (msg._mediaType === 'documentMessage') {
-        ext = msg.message.documentMessage?.fileName
-          ? path.extname(msg.message.documentMessage.fileName)
-          : '.bin';
+      // If media buffer is available, process immediately
+      if (msg._mediaBuffer && msg._mediaType) {
+        console.log('✅ Media buffer available, processing viewOnce...');
+        await this.processViewOnce(conn, key.id);
+      } else {
+        console.log('⚠️ No media buffer available for viewOnce');
       }
 
-      const fileName = `viewonce_${key.id}${ext}`;
-      const filePath = path.join(tempFolder, fileName);
-      try {
-        await fs.promises.writeFile(filePath, msg._mediaBuffer);
-        viewOnceMediaPath[key.id] = filePath;
-        console.log(`✅ ViewOnce media saved: ${filePath}`);
-        
-        // Auto-recover immediately since we have the buffer
-        await this.recoverViewOnce(conn, key.id);
-      } catch (e) {
-        console.log('❌ ViewOnce media save failed:', e.message);
-      }
+    } catch (error) {
+      console.log('❌ Error in viewOnce detection:', error);
     }
   },
 
-  recoverViewOnce: async (conn, messageId) => {
+  processViewOnce: async (conn, messageId) => {
     try {
       const viewOnceData = viewOnceMessages[messageId];
       if (!viewOnceData) {
@@ -58,12 +49,11 @@ module.exports = {
         return;
       }
 
-      const from = viewOnceData.key.remoteJid;
-      const sender = viewOnceData.key.participant || from;
-      const content = viewOnceData.message;
+      const { key, message, sender } = viewOnceData;
+      const from = key.remoteJid;
 
       // Extract viewOnce content
-      const viewOnceContent = content.viewOnceMessage || content.viewOnceMessageV2;
+      const viewOnceContent = message.viewOnceMessage || message.viewOnceMessageV2;
       if (!viewOnceContent?.message) {
         console.log('❌ No message in viewOnce content');
         return;
@@ -78,6 +68,44 @@ module.exports = {
         return;
       }
 
+      console.log(`📁 Processing ${mediaType} from viewOnce`);
+
+      // Get the media buffer from the original message
+      if (!msg._mediaBuffer) {
+        console.log('❌ No media buffer available');
+        return;
+      }
+
+      // Determine file extension
+      let ext = '.bin';
+      let mimeType = 'application/octet-stream';
+      
+      if (mediaType === 'imageMessage') {
+        ext = '.jpg';
+        mimeType = mediaData.mimetype || 'image/jpeg';
+      } else if (mediaType === 'videoMessage') {
+        ext = '.mp4';
+        mimeType = mediaData.mimetype || 'video/mp4';
+      } else if (mediaType === 'stickerMessage') {
+        ext = '.webp';
+        mimeType = 'image/webp';
+      } else if (mediaType === 'audioMessage') {
+        ext = '.ogg';
+        mimeType = 'audio/ogg; codecs=opus';
+      }
+
+      // Save to temp file (optional, for debugging)
+      const fileName = `viewonce_${messageId}${ext}`;
+      const filePath = path.join(tempFolder, fileName);
+      
+      try {
+        await fs.promises.writeFile(filePath, msg._mediaBuffer);
+        console.log(`✅ ViewOnce media saved to: ${filePath}`);
+      } catch (e) {
+        console.log('⚠️ Could not save media file:', e.message);
+      }
+
+      // Create caption
       const caption = `
 ┏━━ 🚨 *VIEWONCE RECOVERED* ━━┓
 
@@ -91,78 +119,72 @@ module.exports = {
 
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`;
 
-      const mediaPath = viewOnceMediaPath[messageId];
-      
-      if (mediaPath && fs.existsSync(mediaPath)) {
-        let messageOptions = { caption, mentions: [sender] };
-        
-        if (mediaPath.endsWith('.jpg')) {
-          await conn.sendMessage(from, { image: { url: mediaPath }, ...messageOptions });
-          console.log(`✅ ViewOnce image recovered and sent to ${from}`);
-        } else if (mediaPath.endsWith('.mp4')) {
-          await conn.sendMessage(from, { video: { url: mediaPath }, ...messageOptions });
-          console.log(`✅ ViewOnce video recovered and sent to ${from}`);
-        } else if (mediaPath.endsWith('.webp')) {
-          await conn.sendMessage(from, { sticker: { url: mediaPath } });
-          await conn.sendMessage(from, { text: caption, mentions: [sender] });
-          console.log(`✅ ViewOnce sticker recovered and sent to ${from}`);
-        } else if (mediaPath.endsWith('.ogg')) {
-          await conn.sendMessage(from, {
-            audio: { url: mediaPath, mimetype: 'audio/ogg; codecs=opus' }
+      // Send the recovered media
+      const messageOptions = { 
+        caption: caption, 
+        mentions: [sender] 
+      };
+
+      try {
+        if (mediaType === 'imageMessage') {
+          await conn.sendMessage(from, { 
+            image: msg._mediaBuffer,
+            mimetype: mimeType,
+            ...messageOptions 
           });
-          await conn.sendMessage(from, { text: caption, mentions: [sender] });
-          console.log(`✅ ViewOnce audio recovered and sent to ${from}`);
+          console.log(`✅ ViewOnce image sent successfully`);
+        } else if (mediaType === 'videoMessage') {
+          await conn.sendMessage(from, { 
+            video: msg._mediaBuffer,
+            mimetype: mimeType,
+            ...messageOptions 
+          });
+          console.log(`✅ ViewOnce video sent successfully`);
+        } else if (mediaType === 'stickerMessage') {
+          await conn.sendMessage(from, { 
+            sticker: msg._mediaBuffer,
+            ...messageOptions 
+          });
+          console.log(`✅ ViewOnce sticker sent successfully`);
         } else {
-          await conn.sendMessage(from, { document: { url: mediaPath }, ...messageOptions });
-          console.log(`✅ ViewOnce document recovered and sent to ${from}`);
+          // For other types, send as document
+          await conn.sendMessage(from, { 
+            document: msg._mediaBuffer,
+            mimetype: mimeType,
+            fileName: `recovered_viewonce${ext}`,
+            ...messageOptions 
+          });
+          console.log(`✅ ViewOnce media sent as document`);
         }
-      } else {
-        // If no media file, try to extract text information
-        let mediaInfo = `Media Type: ${mediaType}\n`;
-        
-        if (mediaData.caption) {
-          mediaInfo += `Caption: ${mediaData.caption}\n`;
+
+        // Clean up
+        delete viewOnceMessages[messageId];
+        try {
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+          }
+        } catch (cleanupError) {
+          console.log('⚠️ Could not delete temp file:', cleanupError.message);
         }
-        
-        if (mediaData.fileName) {
-          mediaInfo += `File Name: ${mediaData.fileName}\n`;
-        }
-        
-        const infoMessage = caption + `\n\n📊 *Media Info:*\n${mediaInfo}\n💡 *Note:* Media buffer not available for automatic recovery.`;
-        await conn.sendMessage(from, { text: infoMessage, mentions: [sender] });
-        console.log(`✅ ViewOnce info sent to ${from}`);
+
+      } catch (sendError) {
+        console.log('❌ Error sending recovered media:', sendError);
       }
 
-      // Clean up
-      delete viewOnceMessages[messageId];
-      if (mediaPath && fs.existsSync(mediaPath)) {
-        fs.unlinkSync(mediaPath);
-        delete viewOnceMediaPath[messageId];
-      }
-
-    } catch (e) {
-      console.log('❌ Error recovering viewOnce message:', e);
+    } catch (error) {
+      console.log('❌ Error processing viewOnce:', error);
     }
   },
 
   onDelete: async (conn, updates) => {
-    // Optional: Clean up viewOnce messages when they're deleted
+    // Clean up viewOnce messages when they're deleted
     for (const update of updates) {
       if (!update || !update.key) continue;
 
       const messageId = update.key.id;
-      
-      // Clean up viewOnce data if the message is deleted
       if (viewOnceMessages[messageId]) {
         delete viewOnceMessages[messageId];
-      }
-      
-      if (viewOnceMediaPath[messageId]) {
-        const mediaPath = viewOnceMediaPath[messageId];
-        if (fs.existsSync(mediaPath)) {
-          fs.unlinkSync(mediaPath);
-        }
-        delete viewOnceMediaPath[messageId];
+        console.log('🧹 Cleaned up deleted viewOnce message:', messageId);
       }
     }
   }
