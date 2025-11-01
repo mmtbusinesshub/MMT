@@ -189,31 +189,6 @@ const up = `
   conn.ev.on('messages.upsert', async(mek) => {
     mek = mek.messages[0];
     if (!mek.message) return;
-    if (mek.message?.viewOnceMessageV2) {
-      try {
-        const msg = mek.message.viewOnceMessageV2.message;
-        const msgType = Object.keys(msg)[0]; // imageMessage / videoMessage
-        const mediaMsg = msg[msgType];
-
-       const stream = await downloadContentFromMessage(
-         mediaMsg,
-         msgType === "imageMessage" ? "image" : "video"
-       );
-
-        let buffer = Buffer.from([]);
-        for await (const chunk of stream) {
-          buffer = Buffer.concat([buffer, chunk]);
-        }
-
-        await conn.sendMessage(mek.key.remoteJid, {
-          [msgType === "imageMessage" ? "image" : "video"]: buffer,
-          caption: "📤 *Here’s the recovered ViewOnce media!*"
-        }, { quoted: mek });
-
-      } catch (err) {
-        console.error("❌ Error recovering viewOnce:", err);
-      }
-    }
 
     const contentType = getContentType(mek.message);
     const content = mek.message[contentType];
@@ -484,6 +459,7 @@ app.listen(port, () => console.log(`🌐 [DILSHAN-MD] Web server running → htt
 setTimeout(() => {
   connectToWA();
 }, 4000);
+
 
 
 
