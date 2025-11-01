@@ -1,113 +1,93 @@
-const fs = require("fs");
-const path = require("path");
-const { downloadContentFromMessage } = require("@whiskeysockets/baileys");
-const { empiretourl } = require("../lib/functions");
+const { downloadContentFromMessage, getContentType } = require('@whiskeysockets/baileys');
+const fs = require('fs');
+const path = require('path');
 
-const tempFolder = path.join(__dirname, "../temp");
-if (!fs.existsSync(tempFolder)) fs.mkdirSync(tempFolder, { recursive: true });
+// Store to track processed viewOnce messages to avoid duplicates
+const processedViewOnceMessages = new Set();
 
 module.exports = {
   onMessage: async (conn, msg) => {
     try {
-      if (!msg.message) return;
-      if (msg.key.fromMe) return;
-
-      console.log("📩 New message received, checking for ViewOnce...");
-
-      // Try to extract view-once content from any known wrapper
-      let viewOnce =
-        msg.message.viewOnceMessageV2Extension?.message ||
-        msg.message.viewOnceMessageV2?.message ||
-        msg.message.viewOnceMessage?.message ||
-        msg.message?.message?.viewOnceMessageV2Extension?.message ||
-        msg.message?.message?.viewOnceMessageV2?.message ||
-        msg.message?.message?.viewOnceMessage?.message;
-
-      if (!viewOnce) {
-        console.log("🚫 Not a ViewOnce message.");
-        return;
-      }
-
-      console.log("✅ ViewOnce message detected!");
-
-      const msgType = Object.keys(viewOnce)[0];
-      console.log("📸 Message type:", msgType);
-
-      if (!["imageMessage", "videoMessage"].includes(msgType)) {
-        console.log("⚠️ Unsupported ViewOnce type:", msgType);
-        return;
-      }
-
-      const mediaMsg = viewOnce[msgType];
-      const from = msg.key.remoteJid;
-      const sender = msg.key.participant || msg.key.remoteJid;
-      const senderNumber = sender.split("@")[0];
-
-      console.log(`👤 Sender: ${senderNumber}`);
-      console.log("⬇️ Downloading media...");
-
-      const stream = await downloadContentFromMessage(
-        mediaMsg,
-        msgType === "imageMessage" ? "image" : "video"
-      );
-
-      let buffer = Buffer.from([]);
-      for await (const chunk of stream) buffer = Buffer.concat([buffer, chunk]);
-      console.log(`✅ Media downloaded (${buffer.length} bytes)`);
-
-      const ext =
-        msgType === "imageMessage"
-          ? mediaMsg.mimetype?.split("/")[1] || "jpg"
-          : mediaMsg.mimetype?.split("/")[1] || "mp4";
-
-      const fileName = `${msg.key.id}.${ext}`;
-      const filePath = path.join(tempFolder, fileName);
-      await fs.promises.writeFile(filePath, buffer);
-      console.log(`💾 Saved to: ${filePath}`);
-
-      // Upload to Empire CDN (optional)
-      let uploadedUrl = null;
-      try {
-        const uploadRes = await empiretourl(filePath);
-        uploadedUrl = uploadRes.url || uploadRes.file || null;
-        console.log("🌐 Uploaded to CDN:", uploadedUrl);
-      } catch (err) {
-        console.log("⚠️ Empire upload failed:", err.message);
-      }
-
-      const caption = `
-┏━━ 🕵️‍♂️ *Anti-ViewOnce Triggered* ━━┓
-👤 *Sender:* @${senderNumber}
-🕒 *Time:* ${new Date().toLocaleString()}
-
-💡 *Recovered ViewOnce ${
-        msgType === "imageMessage" ? "Image" : "Video"
-      }*
-${uploadedUrl ? `🌐 *CDN Link:* ${uploadedUrl}` : ""}
-✅ Service: *MMT Business Hub WhatsApp Assistant*
-┗━━━━━━━━━━━━━━━━━━━━┛`;
-
-      const messageOptions = { caption, mentions: [sender] };
-
-      console.log("📤 Sending recovered ViewOnce back to chat...");
-      if (msgType === "imageMessage") {
-        await conn.sendMessage(from, { image: { url: filePath }, ...messageOptions });
-      } else if (msgType === "videoMessage") {
-        await conn.sendMessage(from, { video: { url: filePath }, ...messageOptions });
-      }
-      console.log("✅ Successfully resent ViewOnce message.");
-
-      // Cleanup
-      setTimeout(() => {
-        try {
-          fs.unlinkSync(filePath);
-          console.log("🧹 Temp file deleted:", fileName);
-        } catch (e) {
-          console.log("⚠️ Failed to delete temp file:", e.message);
+      // Check if it's a viewOnce message
+      if (msg.message?.viewOnceMessage || msg.message?.viewOnceMessageV2) {
+        const messageId = msg.key.id;
+        
+        // Avoid processing the same message multiple times
+        if (processedViewOnceMessages.has(messageId)) {
+          return;
         }
-      }, 15000);
-    } catch (err) {
-      console.error("❌ AntiViewOnce error:", err);
+        processedViewOnceMessages.add(messageId);
+
+        const from = msg.key.remoteJid;
+        const sender = msg.key.participant || from;
+        
+        // Extract the actual media message from viewOnce wrapper
+        const viewOnceContent = msg.message.viewOnceMessage || msg.message.viewOnceMessageV2;
+        const actualMessage = viewOnceContent.message;
+        const mediaType = getContentType(actualMessage);
+        
+        if (!['imageMessage', 'videoMessage'].includes(mediaType)) {
+          return; // Only handle images and videos
+        }
+
+        const mediaMessage = actualMessage[mediaType];
+        
+        try {
+          // Download the media
+          const stream = await downloadContentFromMessage(
+            mediaMessage,
+            mediaType === 'imageMessage' ? 'image' : 'video'
+          );
+
+          let buffer = Buffer.from([]);
+          for await (const chunk of stream) {
+            buffer = Buffer.concat([buffer, chunk]);
+          }
+
+          // Prepare caption with info
+          const caption = `📤 *ViewOnce Media Recovered*\n\n👤 *From:* @${sender.split('@')[0]}\n🕒 *Time:* ${new Date().toLocaleString()}\n📁 *Type:* ${mediaType === 'imageMessage' ? 'Image' : 'Video'}\n\n✅ *Recovered by DILSHAN-MD AntiViewOnce*`;
+
+          // Send the recovered media back
+          if (mediaType === 'imageMessage') {
+            await conn.sendMessage(from, {
+              image: buffer,
+              caption: caption,
+              mentions: [sender]
+            }, { quoted: msg });
+          } else if (mediaType === 'videoMessage') {
+            await conn.sendMessage(from, {
+              video: buffer,
+              caption: caption,
+              mentions: [sender]
+            }, { quoted: msg });
+          }
+
+          console.log(`✅ ViewOnce media recovered from ${sender}`);
+
+          // Clean up: remove from processed set after 5 minutes to free memory
+          setTimeout(() => {
+            processedViewOnceMessages.delete(messageId);
+          }, 5 * 60 * 1000);
+
+        } catch (downloadError) {
+          console.error('❌ Error downloading viewOnce media:', downloadError);
+          await conn.sendMessage(from, {
+            text: `❌ Failed to recover ViewOnce media\n\nError: ${downloadError.message}`
+          }, { quoted: msg });
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error in antiviewonce plugin:', error);
     }
   },
+
+  // Optional: Cleanup function to prevent memory leaks
+  onDelete: async (conn, updates) => {
+    // Clean up processed messages when they're deleted
+    for (const update of updates) {
+      if (update.key?.id) {
+        processedViewOnceMessages.delete(update.key.id);
+      }
+    }
+  }
 };
