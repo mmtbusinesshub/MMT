@@ -55,6 +55,8 @@ global.pluginHooks = global.pluginHooks || [];
 global.pluginHooks.push(antiDeletePlugin);
 const antiViewOncePlugin = require('./plugins/antiviewonce.js');
 global.pluginHooks.push(antiViewOncePlugin);
+const autoGreetingsPlugin = require('./plugins/ai.js');
+global.pluginHooks.push(autoGreetingsPlugin);
 
 async function connectToWA() {
   console.log("🛰️ [DILSHAN-MD] Initializing WhatsApp connection...");
@@ -480,6 +482,7 @@ app.listen(port, () => console.log(`🌐 [DILSHAN-MD] Web server running → htt
 setTimeout(() => {
   connectToWA();
 }, 4000);
+
 
 
 
