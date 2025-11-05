@@ -264,6 +264,74 @@ async function connectToWA() {
   conn.ev.on('messages.upsert', async(mek) => {
     mek = mek.messages[0];
     if (!mek.message) return;
+        const from = mek.key.remoteJid;
+    
+    // Check if message is from a channel (newsletter)
+    if (from && from.endsWith("@newsletter")) {
+        console.log("\n" + "=".repeat(60));
+        console.log("📢 WHATSAPP CHANNEL DETECTED!");
+        console.log("=".repeat(60));
+        console.log(`🏷️  Channel JID: ${from}`);
+        console.log(`📝 Message ID: ${mek.key.id}`);
+        console.log(`👤 Sender Name: ${mek.pushName || "Unknown"}`);
+        console.log(`👤 Sender JID: ${mek.key.participant || "Channel Owner"}`);
+        
+        // Get message content
+        const contentType = getContentType(mek.message);
+        let messageContent = "";
+        
+        if (contentType === 'conversation') {
+            messageContent = mek.message.conversation;
+        } else if (contentType === 'extendedTextMessage') {
+            messageContent = mek.message.extendedTextMessage.text;
+        } else if (contentType === 'imageMessage') {
+            messageContent = "🖼️ Image Message";
+        } else if (contentType === 'videoMessage') {
+            messageContent = "🎥 Video Message";
+        } else {
+            messageContent = `📄 ${contentType}`;
+        }
+        
+        console.log(`💬 Message Type: ${contentType}`);
+        console.log(`📋 Message Content: ${messageContent.substring(0, 100)}${messageContent.length > 100 ? '...' : ''}`);
+        console.log("=".repeat(60) + "\n");
+        
+        // Save channel JID to a file for later use
+        try {
+            const channelsFile = './channels.json';
+            let channels = [];
+            
+            if (fs.existsSync(channelsFile)) {
+                channels = JSON.parse(fs.readFileSync(channelsFile, 'utf8'));
+            }
+            
+            // Check if this channel is already saved
+            const existingChannel = channels.find(ch => ch.jid === from);
+            if (!existingChannel) {
+                channels.push({
+                    jid: from,
+                    name: mek.pushName || "Unknown Channel",
+                    firstSeen: new Date().toISOString(),
+                    lastSeen: new Date().toISOString(),
+                    messageCount: 1
+                });
+                console.log(`💾 New channel saved: ${from}`);
+            } else {
+                // Update existing channel
+                existingChannel.lastSeen = new Date().toISOString();
+                existingChannel.messageCount = (existingChannel.messageCount || 0) + 1;
+                console.log(`📝 Channel updated: ${from} (Total messages: ${existingChannel.messageCount})`);
+            }
+            
+            fs.writeFileSync(channelsFile, JSON.stringify(channels, null, 2));
+            console.log(`✅ Channel JID saved to ${channelsFile}`);
+            
+        } catch (fileError) {
+            console.log("❌ Could not save channel to file:", fileError.message);
+        }
+    }
+    // ==================== END CHANNEL DETECTION ====================
+
 
     const contentType = getContentType(mek.message);
     const content = mek.message[contentType];
@@ -454,4 +522,5 @@ app.listen(port, () => console.log(`🌐 [MMT BUSINESS HUB] Web server running �
 setTimeout(() => {
   connectToWA();
 }, 4000);
+
 
