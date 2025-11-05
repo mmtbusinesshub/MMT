@@ -82,7 +82,8 @@
     "node-cache": "^5.1.2",
     "@raphaelvserafim/google-drive-downloader": "^1.0.3",
     "stream": "^0.0.3",
-    "webtorrent": "^2.8.4"
+    "webtorrent": "^2.8.4",
+     "@vreden/meta": "^9.2.2"
       },
   "resolutions": {
     "libsignal-node": "https://github.com/adiwajshing/libsignal-node"
