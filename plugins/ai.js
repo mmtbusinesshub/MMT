@@ -1,6 +1,7 @@
-// plugins/auto-services.js
+// plugins/auto-services-multilang.js
 const axios = require("axios");
 const cheerio = require("cheerio");
+const translate = require("@vitalets/google-translate-api");
 
 // 🧠 Simple in-memory cache
 let cache = null;
@@ -27,9 +28,8 @@ async function fetchWithRetry(url, retries = 5, delay = 3000) {
   for (let i = 0; i < retries; i++) {
     try {
       console.log(`🌐 Fetch attempt ${i + 1}/${retries}: ${url}`);
-
       const res = await axios.get(url, {
-        timeout: 120000, // ⏱️ 2 minutes
+        timeout: 120000,
         headers: HEADERS,
         validateStatus: (status) => status < 500,
       });
@@ -53,7 +53,7 @@ async function fetchWithRetry(url, retries = 5, delay = 3000) {
   throw new Error("Server unavailable after 5 retries.");
 }
 
-// 🧠 Fetch and parse services page by category
+// 🧠 Fetch and parse services page
 async function fetchServices() {
   const now = Date.now();
   if (cache && now - lastFetch < CACHE_TIME) return cache;
@@ -68,7 +68,6 @@ async function fetchServices() {
   $("tr").each((_, el) => {
     const row = $(el);
 
-    // Detect category row
     if (row.hasClass("catetitle")) {
       currentCategory = row.find("strong.si-title").text().trim();
       return;
@@ -83,14 +82,7 @@ async function fetchServices() {
     const link = row.find("a#buyNow").attr("href") || "https://makemetrend.online/services";
 
     if (name && price) {
-      services.push({
-        category: currentCategory,
-        name,
-        price,
-        min,
-        max,
-        link,
-      });
+      services.push({ category: currentCategory, name, price, min, max, link });
     }
   });
 
@@ -103,20 +95,20 @@ async function fetchServices() {
   return services;
 }
 
-// normalize text for matching
+// 🧠 Normalize text for matching
 function normalize(text) {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  return text.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
 }
 
-// find services by category keywords
+// 🧩 Find services by category keywords
 function findCategoryServices(query, services) {
   const q = normalize(query);
   const keywords = q.split(" ").filter(
-    (w) => !["price", "service", "for", "the", "whats", "what", "is", "of", "a", "to", "and", "me", "need"].includes(w)
+    (w) =>
+      ![
+        "price", "service", "for", "the", "whats", "what",
+        "is", "of", "a", "to", "and", "me", "need",
+      ].includes(w)
   );
 
   if (keywords.length === 0) return [];
@@ -127,13 +119,21 @@ function findCategoryServices(query, services) {
   });
 }
 
-// convert number to emoji
+// 🧩 Convert number to emoji
 function numberToEmoji(num) {
   const emojis = ["0️⃣","1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣"];
-  return String(num)
-    .split("")
-    .map(d => emojis[parseInt(d)] || d)
-    .join("");
+  return String(num).split("").map(d => emojis[parseInt(d)] || d).join("");
+}
+
+// 🧩 Translate text
+async function translateText(text, target = "en") {
+  try {
+    const res = await translate(text, { to: target });
+    return res.text;
+  } catch (err) {
+    console.error("❌ Translation error:", err.message);
+    return text;
+  }
 }
 
 // 🧩 WhatsApp message handler
@@ -153,30 +153,29 @@ module.exports = {
         "";
 
       if (!text.trim()) return;
-      const msg = text.toLowerCase();
       const from = key.remoteJid;
 
-      console.log("📩 Received message:", msg);
+      // Detect language
+      const detection = await translate(text);
+      const userLang = detection.from.language.iso;
+      console.log(`🌐 Detected language: ${userLang}`);
 
-      // confirm plugin is active
-      await conn.sendMessage(
-        from,
-        { text: "✅ Auto-services plugin loaded! Message received." },
-        { quoted: mek }
-      );
+      // Translate message to English for matching
+      const msg = userLang !== "en" ? await translateText(text, "en") : text;
 
-      if (!msg.includes("price") && !msg.includes("service")) return;
+      // Confirm plugin is active (translated)
+      const loadedMsg = await translateText("✅ Auto-services plugin loaded! Message received.", userLang);
+      await conn.sendMessage(from, { text: loadedMsg }, { quoted: mek });
+
+      if (!msg.toLowerCase().includes("price") && !msg.toLowerCase().includes("service")) return;
 
       let services;
       try {
         services = await fetchServices();
       } catch (err) {
         console.error("⚠️ Fetch error:", err.message);
-        await conn.sendMessage(
-          from,
-          { text: "⚠️ The service site is currently busy. Try again later." },
-          { quoted: mek }
-        );
+        const busyMsg = await translateText("⚠️ The service site is currently busy. Try again later.", userLang);
+        await conn.sendMessage(from, { text: busyMsg }, { quoted: mek });
         return;
       }
 
@@ -188,13 +187,13 @@ module.exports = {
           .map((s, i) => `${numberToEmoji(i + 1)} ${s.category} | ${s.name} (${s.price})`)
           .join("\n");
         const reply = `⚠️ Sorry, I couldn't find that service.\n\nHere are a few examples:\n${list}\n\nView all services:\nhttps://makemetrend.online/services`;
-        await conn.sendMessage(from, { text: reply }, { quoted: mek });
+        const translatedReply = await translateText(reply, userLang);
+        await conn.sendMessage(from, { text: translatedReply }, { quoted: mek });
         return;
       }
 
-      // Show all services under category
       const categoryName = matches[0].category;
-      const messageText =
+      let messageText =
         `💼 *${categoryName}*\n\n` +
         matches
           .map(
@@ -203,6 +202,7 @@ module.exports = {
           )
           .join("\n\n");
 
+      messageText = await translateText(messageText, userLang);
       await conn.sendMessage(from, { text: messageText, linkPreview: false }, { quoted: mek });
 
     } catch (err) {
