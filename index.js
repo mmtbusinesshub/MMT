@@ -32,11 +32,141 @@ const { sms } = require('./lib/msg');
 const { getBuffer, getGroupAdmins, getRandom, h2k, isUrl, Json, runtime, sleep, fetchJson } = require('./lib/functions');
 const { File } = require('megajs');
 const express = require("express");
+const cheerio = require("cheerio");
 
 const app = express();
 const port = process.env.PORT || 8000;
 
 const prefix = '.';
+
+// Service Cache System
+let serviceCache = {
+  data: null,
+  lastFetch: 0,
+  lastReset: Date.now()
+};
+const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+
+// Fetch services from makemetrend.online with retry system
+async function fetchServicesPage() {
+  const maxRetries = 10;
+  const retryDelay = 5000; // 5 seconds between retries
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`🌐 [MMT BUSINESS HUB] Fetching services (Attempt ${attempt}/${maxRetries})...`);
+      
+      const response = await axios.get("https://makemetrend.online/services", {
+        timeout: 30000,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+      });
+
+      if (response.status === 200) {
+        const $ = cheerio.load(response.data);
+        const services = [];
+        let currentCategory = null;
+
+        $("tr").each((_, el) => {
+          const row = $(el);
+
+          // Detect category row
+          if (row.hasClass("catetitle")) {
+            currentCategory = row.find("strong.si-title").text().trim();
+            return;
+          }
+
+          if (!currentCategory) return;
+
+          const name = row.find('td[data-label="Service"]').text().trim();
+          const price = row.find("strong").text().trim();
+          const min = row.find("td").eq(3).text().trim();
+          const max = row.find("td").eq(4).text().trim();
+          const link = row.find("a#buyNow").attr("href") || "https://makemetrend.online/services";
+
+          if (name && price) {
+            services.push({
+              category: currentCategory,
+              name,
+              price,
+              min,
+              max,
+              link,
+            });
+          }
+        });
+
+        if (services.length > 0) {
+          serviceCache.data = services;
+          serviceCache.lastFetch = Date.now();
+          console.log(`✅ [MMT BUSINESS HUB] Successfully cached ${services.length} services`);
+          return services;
+        } else {
+          throw new Error("No services found on the page");
+        }
+      } else {
+        throw new Error(`HTTP ${response.status}`);
+      }
+    } catch (error) {
+      console.error(`❌ [MMT BUSINESS HUB] Attempt ${attempt}/${maxRetries} failed:`, error.message);
+      
+      // If this is the last attempt, give up and use existing cache
+      if (attempt === maxRetries) {
+        console.log(`💤 [MMT BUSINESS HUB] All ${maxRetries} attempts failed. Using existing cache or starting without services.`);
+        
+        // If we have existing cache, use it
+        if (serviceCache.data) {
+          console.log(`📦 [MMT BUSINESS HUB] Using existing cache with ${serviceCache.data.length} services`);
+          return serviceCache.data;
+        } else {
+          console.log(`⚠️ [MMT BUSINESS HUB] No cache available. Starting bot without services data.`);
+          return [];
+        }
+      }
+      
+      // Wait before retrying
+      if (attempt < maxRetries) {
+        console.log(`⏳ [MMT BUSINESS HUB] Retrying in ${retryDelay/1000} seconds...`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+      }
+    }
+  }
+}
+
+// Reset cache manually
+function resetServiceCache() {
+  serviceCache.data = null;
+  serviceCache.lastFetch = 0;
+  serviceCache.lastReset = Date.now();
+  console.log("🔄 [MMT BUSINESS HUB] Service cache reset");
+}
+
+// Get services (uses cache if available and fresh)
+async function getServices() {
+  const now = Date.now();
+  
+  // Reset cache every 24 hours
+  if (now - serviceCache.lastReset >= CACHE_DURATION) {
+    console.log("🔄 [MMT BUSINESS HUB] Auto-resetting 24-hour cache...");
+    resetServiceCache();
+  }
+  
+  // Fetch new data if cache is empty or older than 1 hour
+  if (!serviceCache.data || now - serviceCache.lastFetch >= 60 * 60 * 1000) {
+    return await fetchServicesPage();
+  }
+  
+  return serviceCache.data || [];
+}
+
+// Make services available globally
+global.mmtServices = {
+  getServices,
+  resetServiceCache,
+  fetchServicesPage
+};
+
 if (!fs.existsSync(__dirname + '/auth_info_baileys/creds.json')) {
   if (!config.SESSION_ID) return console.log('❗ [MMT BUSINESS HUB] SESSION_ID not found in env. Please configure it.');
   const sessdata = config.SESSION_ID;
@@ -56,8 +186,22 @@ global.pluginHooks.push(antiDeletePlugin);
 const autoGreetingsPlugin = require('./plugins/ai.js');
 global.pluginHooks.push(autoGreetingsPlugin);
 
+
 async function connectToWA() {
   console.log("🛰️ [MMT BUSINESS HUB] Initializing WhatsApp connection...");
+  
+  // Pre-load services when bot starts (non-blocking)
+  console.log("📥 [MMT BUSINESS HUB] Pre-loading services cache...");
+  fetchServicesPage().then(services => {
+    if (services && services.length > 0) {
+      console.log(`✅ [MMT BUSINESS HUB] Services pre-loaded: ${services.length} items`);
+    } else {
+      console.log(`⚠️ [MMT BUSINESS HUB] Services pre-load completed with no data`);
+    }
+  }).catch(error => {
+    console.log(`⚠️ [MMT BUSINESS HUB] Services pre-load failed: ${error.message}`);
+  });
+  
   const { state, saveCreds } = await useMultiFileAuthState(__dirname + '/auth_info_baileys/');
   const { version } = await fetchLatestBaileysVersion();
   
@@ -92,13 +236,22 @@ async function connectToWA() {
 ┃ 👑 *Auto-Reply System* : ACTIVATED     
 ┃ 📡 *Business Account* : MMT BUSINESS HUB
 ┃ 💠 *Powered By* : WhatsApp Business API
+┃ 📊 *Services Cached* : ${serviceCache.data ? serviceCache.data.length : 0} items
 ┃                                           
 ╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯
 
 🌟 *Social Media Marketing Assistant Ready!*  
 
-💼 *Use appropriate message for auto reply system to explore our services*
-🔹 *Use *.ping* for test if bot alive or not*
+📊 *Services Available:*
+• Social Media Management
+• Content Creation & Strategy
+• Facebook/Instagram Ads
+• YouTube Optimization
+• LinkedIn Marketing
+• TikTok Campaigns
+
+💼 *Use *.menu* to explore all features*
+🔹 *Use *.services* for pricing*
 🔹 *Use *.help* for assistance*
 
 🎯 *Growing Your Business, One Click at a Time!*
@@ -110,6 +263,7 @@ async function connectToWA() {
     }
   });
 
+  // Rest of your existing code remains the same...
   conn.ev.on('creds.update', saveCreds);
 
   conn.ev.on('messages.upsert', async(mek) => {
@@ -305,4 +459,3 @@ app.listen(port, () => console.log(`🌐 [MMT BUSINESS HUB] Web server running �
 setTimeout(() => {
   connectToWA();
 }, 4000);
-
