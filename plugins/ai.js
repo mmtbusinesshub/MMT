@@ -1,4 +1,4 @@
-// plugins/auto-services-multilang.js
+// plugins/auto-services-multi.js
 const axios = require("axios");
 const cheerio = require("cheerio");
 const translate = require("@vitalets/google-translate-api");
@@ -7,6 +7,7 @@ const translate = require("@vitalets/google-translate-api");
 let cache = null;
 let lastFetch = 0;
 const CACHE_TIME = 5 * 60 * 1000; // 5 minutes
+const MAX_RESULTS = 5; // top N services
 
 // 🧩 Browser-like headers to avoid blocking
 const HEADERS = {
@@ -33,7 +34,6 @@ async function fetchWithRetry(url, retries = 5, delay = 3000) {
         headers: HEADERS,
         validateStatus: (status) => status < 500,
       });
-
       if (res.status === 200 && res.data) {
         console.log("✅ Successfully fetched services page.");
         return res.data;
@@ -43,13 +43,8 @@ async function fetchWithRetry(url, retries = 5, delay = 3000) {
     } catch (err) {
       console.warn(`❌ Attempt ${i + 1} failed: ${err.message}`);
     }
-
-    if (i < retries - 1) {
-      console.log(`⏳ Waiting ${delay / 1000}s before retry...`);
-      await new Promise((r) => setTimeout(r, delay));
-    }
+    if (i < retries - 1) await new Promise((r) => setTimeout(r, delay));
   }
-
   throw new Error("Server unavailable after 5 retries.");
 }
 
@@ -86,8 +81,7 @@ async function fetchServices() {
     }
   });
 
-  if (services.length === 0)
-    throw new Error("No services found — check HTML structure or site status.");
+  if (services.length === 0) throw new Error("No services found.");
 
   cache = services;
   lastFetch = now;
@@ -95,48 +89,43 @@ async function fetchServices() {
   return services;
 }
 
-// 🧠 Normalize text for matching
+// normalize text
 function normalize(text) {
   return text.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
 }
 
-// 🧩 Find services by category keywords
+// find services by category keywords
 function findCategoryServices(query, services) {
   const q = normalize(query);
   const keywords = q.split(" ").filter(
-    (w) =>
-      ![
-        "price", "service", "for", "the", "whats", "what",
-        "is", "of", "a", "to", "and", "me", "need",
-      ].includes(w)
+    (w) => !["price", "service", "for", "the", "whats", "what", "is", "of", "a", "to", "and", "me", "need"].includes(w)
   );
-
-  if (keywords.length === 0) return [];
-
+  if (!keywords.length) return [];
   return services.filter((s) => {
     const cat = normalize(s.category);
     return keywords.every((k) => cat.includes(k));
   });
 }
 
-// 🧩 Convert number to emoji
+// number to emoji
 function numberToEmoji(num) {
   const emojis = ["0️⃣","1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣"];
   return String(num).split("").map(d => emojis[parseInt(d)] || d).join("");
 }
 
-// 🧩 Translate text
-async function translateText(text, target = "en") {
+// safe translation
+async function safeTranslate(text, target = "en") {
   try {
     const res = await translate(text, { to: target });
-    return res.text;
+    if (!res || !res.from || !res.from.language || !res.from.language.iso) throw new Error("Invalid response");
+    return { text: res.text, from: res.from.language.iso };
   } catch (err) {
-    console.error("❌ Translation error:", err.message);
-    return text;
+    console.warn("❌ Translation error:", err.message);
+    return { text, from: "en" };
   }
 }
 
-// 🧩 WhatsApp message handler
+// WhatsApp handler
 module.exports = {
   onMessage: async (conn, mek) => {
     try {
@@ -155,55 +144,43 @@ module.exports = {
       if (!text.trim()) return;
       const from = key.remoteJid;
 
-      // Detect language
-      const detection = await translate(text);
-      const userLang = detection.from.language.iso;
-      console.log(`🌐 Detected language: ${userLang}`);
+      // Detect language and translate to English
+      const { text: translatedMsg, from: userLang } = await safeTranslate(text, "en");
 
-      // Translate message to English for matching
-      const msg = userLang !== "en" ? await translateText(text, "en") : text;
+      // confirm plugin is active
+      await conn.sendMessage(from, { text: "✅ Auto-services plugin loaded! Message received." }, { quoted: mek });
 
-      // Confirm plugin is active (translated)
-      const loadedMsg = await translateText("✅ Auto-services plugin loaded! Message received.", userLang);
-      await conn.sendMessage(from, { text: loadedMsg }, { quoted: mek });
-
-      if (!msg.toLowerCase().includes("price") && !msg.toLowerCase().includes("service")) return;
+      if (!translatedMsg.includes("price") && !translatedMsg.includes("service")) return;
 
       let services;
       try {
         services = await fetchServices();
       } catch (err) {
-        console.error("⚠️ Fetch error:", err.message);
-        const busyMsg = await translateText("⚠️ The service site is currently busy. Try again later.", userLang);
-        await conn.sendMessage(from, { text: busyMsg }, { quoted: mek });
+        await conn.sendMessage(from, { text: "⚠️ The service site is currently busy. Try again later." }, { quoted: mek });
         return;
       }
 
-      const matches = findCategoryServices(msg, services);
-
+      const matches = findCategoryServices(translatedMsg, services);
       if (!matches.length) {
-        const list = services
-          .slice(0, 5)
-          .map((s, i) => `${numberToEmoji(i + 1)} ${s.category} | ${s.name} (${s.price})`)
-          .join("\n");
+        const list = services.slice(0, MAX_RESULTS)
+          .map((s, i) => `${numberToEmoji(i+1)} ${s.category} | ${s.name} (${s.price})`).join("\n");
         const reply = `⚠️ Sorry, I couldn't find that service.\n\nHere are a few examples:\n${list}\n\nView all services:\nhttps://makemetrend.online/services`;
-        const translatedReply = await translateText(reply, userLang);
-        await conn.sendMessage(from, { text: translatedReply }, { quoted: mek });
+        await conn.sendMessage(from, { text: reply }, { quoted: mek });
         return;
       }
 
-      const categoryName = matches[0].category;
-      let messageText =
-        `💼 *${categoryName}*\n\n` +
-        matches
-          .map(
-            (s, i) =>
-              `${numberToEmoji(i + 1)} *${s.name}*\n💰 Price: ${s.price}\n📦 Min: ${s.min} | 📈 Max: ${s.max}\n🛒 [Buy Now](${s.link})`
-          )
-          .join("\n\n");
+      // show only top N matches
+      const topMatches = matches.slice(0, MAX_RESULTS);
+      const categoryName = topMatches[0].category;
+      const messageText = `💼 *${categoryName}*\n\n` + topMatches
+        .map((s, i) =>
+          `${numberToEmoji(i+1)} *${s.name}*\n💰 Price: ${s.price}\n📦 Min: ${s.min} | 📈 Max: ${s.max}\n🛒 [Buy Now](${s.link})`
+        ).join("\n\n") + `\n\n🔗 View all: https://makemetrend.online/services`;
 
-      messageText = await translateText(messageText, userLang);
-      await conn.sendMessage(from, { text: messageText, linkPreview: false }, { quoted: mek });
+      // Translate back to user's language if needed
+      const finalMsg = userLang !== "en" ? (await safeTranslate(messageText, userLang)).text : messageText;
+
+      await conn.sendMessage(from, { text: finalMsg, linkPreview: false }, { quoted: mek });
 
     } catch (err) {
       console.error("❌ auto-services plugin error:", err);
