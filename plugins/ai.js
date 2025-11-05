@@ -74,10 +74,8 @@ async function fetchServices() {
       return;
     }
 
-    // Skip if no category yet
     if (!currentCategory) return;
 
-    // Parse service row
     const name = row.find('td[data-label="Service"]').text().trim();
     const price = row.find("strong").text().trim();
     const min = row.find("td").eq(3).text().trim();
@@ -129,6 +127,15 @@ function findCategoryServices(query, services) {
   });
 }
 
+// convert number to emoji
+function numberToEmoji(num) {
+  const emojis = ["0️⃣","1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣"];
+  return String(num)
+    .split("")
+    .map(d => emojis[parseInt(d)] || d)
+    .join("");
+}
+
 // 🧩 WhatsApp message handler
 module.exports = {
   onMessage: async (conn, mek) => {
@@ -151,7 +158,7 @@ module.exports = {
 
       console.log("📩 Received message:", msg);
 
-      // Always reply to confirm plugin is active
+      // confirm plugin is active
       await conn.sendMessage(
         from,
         { text: "✅ Auto-services plugin loaded! Message received." },
@@ -178,26 +185,26 @@ module.exports = {
       if (!matches.length) {
         const list = services
           .slice(0, 5)
-          .map((s) => `• ${s.category} | ${s.name} (${s.price})`)
+          .map((s, i) => `${numberToEmoji(i + 1)} ${s.category} | ${s.name} (${s.price})`)
           .join("\n");
         const reply = `⚠️ Sorry, I couldn't find that service.\n\nHere are a few examples:\n${list}\n\nView all services:\nhttps://makemetrend.online/services`;
         await conn.sendMessage(from, { text: reply }, { quoted: mek });
         return;
       }
 
-      // show only top 5 services per category
+      // Show all services under category
       const categoryName = matches[0].category;
-      const topServices = matches.slice(0, 5);
       const messageText =
         `💼 *${categoryName}*\n\n` +
-        topServices
+        matches
           .map(
-            (s) =>
-              `• ${s.name} | Price: ${s.price} | Min: ${s.min} | Max: ${s.max}\n[Buy Now](${s.link})`
+            (s, i) =>
+              `${numberToEmoji(i + 1)} *${s.name}*\n💰 Price: ${s.price}\n📦 Min: ${s.min} | 📈 Max: ${s.max}\n🛒 [Buy Now](${s.link})`
           )
           .join("\n\n");
 
       await conn.sendMessage(from, { text: messageText, linkPreview: false }, { quoted: mek });
+
     } catch (err) {
       console.error("❌ auto-services plugin error:", err);
     }
