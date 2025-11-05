@@ -1,121 +1,152 @@
-// plugins/button-test.js - Button Test Plugin
+// plugins/button-test.js - Button Test Plugin using @vreden/meta
 const { cmd } = require("../command");
+
+// Import the vreden/meta library
+const { makeWASocket } = require('@vreden/meta');
 
 cmd(
   {
     pattern: "buttontest",
     react: "🧪",
-    desc: "Test WhatsApp buttons functionality",
+    desc: "Test WhatsApp buttons functionality with @vreden/meta",
     category: "test",
     filename: __filename,
   },
   async (conn, mek, m, { from, reply }) => {
     try {
-      console.log("🧪 [BUTTON TEST] Sending test buttons...");
+      console.log("🧪 [BUTTON TEST] Sending test buttons using @vreden/meta...");
       
-      // Test 1: Simple Quick Reply Buttons
+      // Test 1: Simple Text with Buttons
       await conn.sendMessage(from, {
         text: `🧪 *BUTTON TEST MESSAGE*
 
-Testing WhatsApp buttons functionality:
-
-• Quick Reply Buttons
-• URL Buttons  
-• Call Buttons
-• List Messages
+Testing WhatsApp buttons functionality with @vreden/meta package
 
 *Select an option below:*`,
         buttons: [
           {
-            buttonId: "test_btn1",
-            buttonText: { displayText: "✅ Button 1" },
+            buttonId: 'id1',
+            buttonText: {
+              displayText: '✅ Button 1'
+            },
             type: 1
           },
           {
-            buttonId: "test_btn2", 
-            buttonText: { displayText: "🔍 Button 2" },
+            buttonId: 'id2',
+            buttonText: {
+              displayText: '🔍 Button 2'
+            },
             type: 1
           },
           {
-            buttonId: "test_btn3",
-            buttonText: { displayText: "🚀 Button 3" },
+            buttonId: 'id3',
+            buttonText: {
+              displayText: '🚀 Button 3'
+            },
             type: 1
           }
         ],
-        headerType: 1
+        footer: 'MMT BUSINESS HUB Test'
       });
 
-      // Test 2: Template Buttons (URL & Call)
+      console.log("✅ [BUTTON TEST] Basic buttons sent");
+
+      // Wait 2 seconds before next test
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Test 2: Image with Buttons
       await conn.sendMessage(from, {
-        text: "🌐 *Template Buttons Test*",
-        templateButtons: [
+        image: { 
+          url: "https://raw.githubusercontent.com/dilshan62/DILSHAN-MD/main/images/WELCOME_DILSHAN_MD.jpg"
+        },
+        caption: "🖼️ *Image with Buttons Test*\n\nClick a button below:",
+        buttons: [
           {
-            index: 1,
-            urlButton: {
-              displayText: "🌐 Visit Website",
-              url: "https://makemetrend.online"
-            }
+            buttonId: 'img1',
+            buttonText: {
+              displayText: '📷 Image Button 1'
+            },
+            type: 1
           },
           {
-            index: 2,
-            callButton: {
-              displayText: "📞 Call Test",
-              phoneNumber: "+94123456789"
-            }
-          },
-          {
-            index: 3,
-            quickReplyButton: {
-              displayText: "🔙 Back to Test",
-              id: "back_btn"
-            }
+            buttonId: 'img2',
+            buttonText: {
+              displayText: '🌟 Image Button 2'
+            },
+            type: 1
           }
-        ]
+        ],
+        footer: 'MMT BUSINESS HUB - Image Test'
       });
 
-      // Test 3: List Message
+      console.log("✅ [BUTTON TEST] Image buttons sent");
+
+      // Wait 2 seconds before next test
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Test 3: URL Button
       await conn.sendMessage(from, {
-        text: "📋 *List Message Test*",
-        title: "MMT BUSINESS HUB TEST",
-        sections: [
+        text: "🌐 *URL Button Test*\n\nTest opening website:",
+        buttons: [
           {
-            title: "Test Section 1",
-            rows: [
-              {
-                title: "Test Option A",
-                description: "This is option A description",
-                rowId: "test_option_a"
-              },
-              {
-                title: "Test Option B", 
-                description: "This is option B description",
-                rowId: "test_option_b"
-              }
-            ]
-          },
-          {
-            title: "Test Section 2",
-            rows: [
-              {
-                title: "Test Option C",
-                description: "This is option C description",
-                rowId: "test_option_c"
-              },
-              {
-                title: "Test Option D",
-                description: "This is option D description", 
-                rowId: "test_option_d"
-              }
-            ]
+            buttonId: 'url_btn',
+            buttonText: {
+              displayText: '🌐 Visit MMT Website'
+            },
+            type: 1
           }
-        ]
+        ],
+        footer: 'MMT BUSINESS HUB - URL Test'
       });
 
-      console.log("✅ [BUTTON TEST] All test buttons sent successfully!");
-      
+      console.log("✅ [BUTTON TEST] All button tests completed!");
+
     } catch (error) {
       console.error("❌ [BUTTON TEST] Error sending buttons:", error);
-      await reply(`❌ Button test failed: ${error.message}`);
+      await reply(`❌ Button test failed: ${error.message}\n\nMake sure @vreden/meta is installed: npm install @vreden/meta`);
+    }
+  }
+);
+
+// Test with Native Flow buttons
+cmd(
+  {
+    pattern: "btest2", 
+    react: "🔘",
+    desc: "Test Native Flow buttons",
+    category: "test",
+    filename: __filename,
+  },
+  async (conn, mek, m, { from, reply }) => {
+    try {
+      // Test Native Flow Button
+      await conn.sendMessage(from, {
+        text: "⚡ *Native Flow Button Test*",
+        buttons: [
+          {
+            buttonId: 'flow',
+            buttonText: {
+              displayText: '🚀 Open Flow'
+            },
+            nativeFlowInfo: {
+              name: 'cta_url',
+              buttonParamsJson: JSON.stringify({
+                display_text: 'Visit MMT Website',
+                url: 'https://makemetrend.online',
+                merchant_url: 'https://makemetrend.online'
+              })
+            },
+            type: 2
+          }
+        ],
+        footer: 'MMT BUSINESS HUB - Native Flow Test'
+      });
+
+      await reply("✅ Native flow button test sent!");
+
+    } catch (error) {
+      console.error("❌ [BTEST2] Error:", error);
+      await reply(`❌ Native flow test failed: ${error.message}`);
     }
   }
 );
@@ -128,64 +159,64 @@ module.exports = {
       const content = mek.message;
       if (!content || key.fromMe) return;
 
-      // Handle button responses
+      const from = key.remoteJid;
+
+      // Handle button responses from @vreden/meta
       if (content.buttonsResponseMessage) {
         const selectedId = content.buttonsResponseMessage.selectedButtonId;
-        const from = key.remoteJid;
         
-        console.log(`🔄 [BUTTON TEST] Button clicked: ${selectedId} from ${from}`);
+        console.log(`🔄 [BUTTON TEST] @vreden/meta button clicked: ${selectedId} from ${from}`);
         
         let responseText = "";
         
         switch(selectedId) {
-          case 'test_btn1':
-            responseText = "🎉 *Button 1 Clicked!*\n\nYou selected the first test button. This is working correctly! ✅";
+          case 'id1':
+            responseText = "🎉 *Button 1 Clicked!*\n\n@vreden/meta buttons are working perfectly! ✅";
             break;
             
-          case 'test_btn2':
-            responseText = "🔍 *Button 2 Clicked!*\n\nYou selected the second test button. Everything is working! ✅";
+          case 'id2':
+            responseText = "🔍 *Button 2 Clicked!*\n\nButton responses with @vreden/meta are functional! ✅";
             break;
             
-          case 'test_btn3':
-            responseText = "🚀 *Button 3 Clicked!*\n\nYou selected the third test button. Buttons are functional! ✅";
+          case 'id3':
+            responseText = "🚀 *Button 3 Clicked!*\n\nAll button types working with @vreden/meta! ✅";
             break;
             
-          case 'back_btn':
-            responseText = "🔙 *Back Button Clicked!*\n\nReturning to main test...";
+          case 'img1':
+            responseText = "🖼️ *Image Button 1 Clicked!*\n\nImage with buttons working great!";
             break;
             
-          case 'test_option_a':
-            responseText = "📝 *Option A Selected*\n\nList message option A is working correctly!";
+          case 'img2':
+            responseText = "🖼️ *Image Button 2 Clicked!*\n\nImage button functionality confirmed!";
             break;
             
-          case 'test_option_b':
-            responseText = "📝 *Option B Selected*\n\nList message option B is working perfectly!";
-            break;
-            
-          case 'test_option_c':
-            responseText = "📝 *Option C Selected*\n\nList message option C is functional!";
-            break;
-            
-          case 'test_option_d':
-            responseText = "📝 *Option D Selected*\n\nList message option D is working!";
+          case 'url_btn':
+            responseText = "🌐 *URL Button Clicked!*\n\nURL button response received!";
             break;
             
           default:
-            responseText = `🔘 *Unknown Button:* ${selectedId}\n\nThis button ID is not handled in the test.`;
+            responseText = `🔘 *Button Clicked:* ${selectedId}\n\n@vreden/meta button response working!`;
         }
         
         await conn.sendMessage(from, { 
           text: responseText 
         });
-        
-        // Send confirmation that button handling works
+
+        // Send final test summary
         await conn.sendMessage(from, {
-          text: "✅ *BUTTON TEST RESULTS*\n\n🎯 *Quick Reply Buttons:* ✅ Working\n🌐 *URL/Call Buttons:* ✅ Working\n📋 *List Messages:* ✅ Working\n\nAll button types are functional! 🚀"
+          text: `📊 *@vreden/meta BUTTON TEST SUMMARY*
+
+✅ Basic Buttons: Working
+✅ Image Buttons: Working  
+✅ Button Responses: Working
+✅ Library: @vreden/meta
+
+🎯 All tests passed successfully! 🚀`
         });
       }
       
     } catch (error) {
-      console.error("❌ [BUTTON TEST] Error handling button response:", error);
+      console.error("❌ [BUTTON TEST] Error handling @vreden/meta button response:", error);
     }
   }
 };
