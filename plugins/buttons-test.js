@@ -4,26 +4,27 @@ cmd(
   {
     pattern: "buttons",
     react: "🔘",
-    desc: "Send a 2-button test message (new format)",
+    desc: "Send a 2-button test message",
     category: "main",
     filename: __filename,
   },
   async (dilshan, mek, m, { reply }) => {
     try {
-      const templateButtons = [
-        { index: 1, quickReplyButton: { displayText: "✅ Button 1", id: "btn_1" } },
-        { index: 2, quickReplyButton: { displayText: "🚀 Button 2", id: "btn_2" } },
+      const buttons = [
+        { buttonId: "btn_1", buttonText: { displayText: "Button 1 ✅" }, type: 1 },
+        { buttonId: "btn_2", buttonText: { displayText: "Button 2 🚀" }, type: 1 },
       ];
 
-      const message = {
+      const buttonMessage = {
         text: "Here’s a 2-button test message 👇",
-        footer: "Baileys Template Button Test",
-        templateButtons,
+        footer: "Baileys Button Test",
+        buttons: buttons,
+        headerType: 1
       };
 
-      await dilshan.sendMessage(m.chat, message);
+      await dilshan.sendMessage(m.chat, buttonMessage, { quoted: m });
     } catch (err) {
-      console.error("Error sending template buttons:", err);
+      console.error("Error sending buttons:", err);
       await reply("❌ Failed to send button message.");
     }
   }
