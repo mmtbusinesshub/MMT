@@ -1,7 +1,6 @@
 // plugins/auto-services.js
 const axios = require("axios");
 const cheerio = require("cheerio");
-const config = require("../config");
 
 // 🧠 Simple in-memory cache
 let cache = null;
@@ -32,7 +31,7 @@ async function fetchWithRetry(url, retries = 5, delay = 3000) {
       const res = await axios.get(url, {
         timeout: 120000, // ⏱️ 2 minutes
         headers: HEADERS,
-        validateStatus: (status) => status < 500, // retry on 5xx
+        validateStatus: (status) => status < 500,
       });
 
       if (res.status === 200 && res.data) {
@@ -54,7 +53,7 @@ async function fetchWithRetry(url, retries = 5, delay = 3000) {
   throw new Error("Server unavailable after 5 retries.");
 }
 
-// 🧠 Fetch and parse services page
+// 🧠 Fetch and parse services page by category
 async function fetchServices() {
   const now = Date.now();
   if (cache && now - lastFetch < CACHE_TIME) return cache;
@@ -64,17 +63,36 @@ async function fetchServices() {
   const $ = cheerio.load(html);
 
   const services = [];
+  let currentCategory = null;
 
-  $("tr[data-filter-table-category-id]").each((_, el) => {
-    const name = $(el).find('td[data-label="Service"]').text().trim();
-    const price = $(el).find("strong").text().trim();
-    const min = $(el).find("td").eq(3).text().trim();
-    const max = $(el).find("td").eq(4).text().trim();
-    const link =
-      $(el).find("a#buyNow").attr("href") ||
-      "https://makemetrend.online/services";
+  $("tr").each((_, el) => {
+    const row = $(el);
+
+    // Detect category row
+    if (row.hasClass("catetitle")) {
+      currentCategory = row.find("strong.si-title").text().trim();
+      return;
+    }
+
+    // Skip if no category yet
+    if (!currentCategory) return;
+
+    // Parse service row
+    const name = row.find('td[data-label="Service"]').text().trim();
+    const price = row.find("strong").text().trim();
+    const min = row.find("td").eq(3).text().trim();
+    const max = row.find("td").eq(4).text().trim();
+    const link = row.find("a#buyNow").attr("href") || "https://makemetrend.online/services";
+
     if (name && price) {
-      services.push({ name, price, min, max, link });
+      services.push({
+        category: currentCategory,
+        name,
+        price,
+        min,
+        max,
+        link,
+      });
     }
   });
 
@@ -87,10 +105,28 @@ async function fetchServices() {
   return services;
 }
 
-// 🔍 Find service matching user query
-function findService(query, services) {
-  query = query.toLowerCase();
-  return services.find((s) => s.name.toLowerCase().includes(query));
+// normalize text for matching
+function normalize(text) {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// find services by category keywords
+function findCategoryServices(query, services) {
+  const q = normalize(query);
+  const keywords = q.split(" ").filter(
+    (w) => !["price", "service", "for", "the", "whats", "what", "is", "of", "a", "to", "and", "me", "need"].includes(w)
+  );
+
+  if (keywords.length === 0) return [];
+
+  return services.filter((s) => {
+    const cat = normalize(s.category);
+    return keywords.every((k) => cat.includes(k));
+  });
 }
 
 // 🧩 WhatsApp message handler
@@ -101,7 +137,6 @@ module.exports = {
       const content = mek.message;
       if (!content || key.fromMe) return;
 
-      // extract text message
       const text =
         content.conversation ||
         content.extendedTextMessage?.text ||
@@ -116,17 +151,15 @@ module.exports = {
 
       console.log("📩 Received message:", msg);
 
-      // ✅ Always reply once to confirm plugin works
+      // Always reply to confirm plugin is active
       await conn.sendMessage(
         from,
         { text: "✅ Auto-services plugin loaded! Message received." },
         { quoted: mek }
       );
 
-      // only continue if user asked about price/service
       if (!msg.includes("price") && !msg.includes("service")) return;
 
-      // 🧠 fetch services list
       let services;
       try {
         services = await fetchServices();
@@ -140,22 +173,31 @@ module.exports = {
         return;
       }
 
-      // 🔍 find matching service
-      const match = findService(msg, services);
+      const matches = findCategoryServices(msg, services);
 
-      if (!match) {
+      if (!matches.length) {
         const list = services
           .slice(0, 5)
-          .map((s) => `• ${s.name} (${s.price})`)
+          .map((s) => `• ${s.category} | ${s.name} (${s.price})`)
           .join("\n");
         const reply = `⚠️ Sorry, I couldn't find that service.\n\nHere are a few examples:\n${list}\n\nView all services:\nhttps://makemetrend.online/services`;
         await conn.sendMessage(from, { text: reply }, { quoted: mek });
         return;
       }
 
-      // 💬 reply with found service details
-      const reply = `💼 *${match.name}*\n💰 *Price per 1000:* ${match.price}\n📦 *Min Order:* ${match.min}\n📈 *Max Order:* ${match.max}\n🛒 [Buy Now](${match.link})`;
-      await conn.sendMessage(from, { text: reply }, { quoted: mek });
+      // show only top 5 services per category
+      const categoryName = matches[0].category;
+      const topServices = matches.slice(0, 5);
+      const messageText =
+        `💼 *${categoryName}*\n\n` +
+        topServices
+          .map(
+            (s) =>
+              `• ${s.name} | Price: ${s.price} | Min: ${s.min} | Max: ${s.max}\n[Buy Now](${s.link})`
+          )
+          .join("\n\n");
+
+      await conn.sendMessage(from, { text: messageText, linkPreview: false }, { quoted: mek });
     } catch (err) {
       console.error("❌ auto-services plugin error:", err);
     }
