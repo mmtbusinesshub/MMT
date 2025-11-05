@@ -174,8 +174,6 @@ const { replyHandlers, commands } = require('./command');
 const antiDeletePlugin = require('./plugins/antidelete.js');
 global.pluginHooks = global.pluginHooks || [];
 global.pluginHooks.push(antiDeletePlugin);
-const autoGreetingsPlugin = require('./plugins/ai.js');
-global.pluginHooks.push(autoGreetingsPlugin);
 
 async function connectToWA() {
   console.log("🛰️ [MMT BUSINESS HUB] Initializing WhatsApp connection...");
@@ -258,6 +256,7 @@ async function connectToWA() {
     }
   });
 
+  // Rest of your existing code remains the same...
   conn.ev.on('creds.update', saveCreds);
 
   conn.ev.on('messages.upsert', async(mek) => {
@@ -266,145 +265,79 @@ async function connectToWA() {
 
     const contentType = getContentType(mek.message);
     const content = mek.message[contentType];
-    const from = mek.key.remoteJid;
-
-    // ==================== CHANNEL DETECTION ====================
-    // Detect channel messages and log JID
-    if (from && from.endsWith("@newsletter")) {
-        console.log("\n" + "=".repeat(60));
-        console.log("📢 WHATSAPP CHANNEL DETECTED!");
-        console.log("=".repeat(60));
-        console.log(`🏷️  Channel JID: ${from}`);
-        console.log(`📝 Message ID: ${mek.key.id}`);
-        console.log(`👤 Sender Name: ${mek.pushName || "Unknown"}`);
-        console.log(`👤 Sender JID: ${mek.key.participant || "Channel Owner"}`);
-        
-        // Get message content
-        let messageContent = "";
-        
-        if (contentType === 'conversation') {
-            messageContent = mek.message.conversation;
-        } else if (contentType === 'extendedTextMessage') {
-            messageContent = mek.message.extendedTextMessage.text;
-        } else if (contentType === 'imageMessage') {
-            messageContent = "🖼️ Image Message";
-        } else if (contentType === 'videoMessage') {
-            messageContent = "🎥 Video Message";
-        } else {
-            messageContent = `📄 ${contentType}`;
-        }
-        
-        console.log(`💬 Message Type: ${contentType}`);
-        console.log(`📋 Message Content: ${messageContent.substring(0, 100)}${messageContent.length > 100 ? '...' : ''}`);
-        console.log("=".repeat(60) + "\n");
-        
-        // Save channel JID to a file for later use
-        try {
-            const channelsFile = './channels.json';
-            let channels = [];
-            
-            if (fs.existsSync(channelsFile)) {
-                channels = JSON.parse(fs.readFileSync(channelsFile, 'utf8'));
-            }
-            
-            // Check if this channel is already saved
-            const existingChannel = channels.find(ch => ch.jid === from);
-            if (!existingChannel) {
-                channels.push({
-                    jid: from,
-                    name: mek.pushName || "Unknown Channel",
-                    firstSeen: new Date().toISOString(),
-                    lastSeen: new Date().toISOString(),
-                    messageCount: 1
-                });
-                console.log(`💾 New channel saved: ${from}`);
-            } else {
-                // Update existing channel
-                existingChannel.lastSeen = new Date().toISOString();
-                existingChannel.messageCount = (existingChannel.messageCount || 0) + 1;
-                console.log(`📝 Channel updated: ${from} (Total messages: ${existingChannel.messageCount})`);
-            }
-            
-            fs.writeFileSync(channelsFile, JSON.stringify(channels, null, 2));
-            console.log(`✅ Channel JID saved to ${channelsFile}`);
-            
-        } catch (fileError) {
-            console.log("❌ Could not save channel to file:", fileError.message);
-        }
-    }
-    // ==================== END CHANNEL DETECTION ====================
 
     if (['imageMessage', 'videoMessage', 'audioMessage', 'stickerMessage', 'documentMessage'].includes(contentType)) {
-        try {
-            const stream = await downloadContentFromMessage(content, contentType.replace('Message', ''));
-            const buffer = [];
-            for await (const chunk of stream) buffer.push(chunk);
-            mek._mediaBuffer = Buffer.concat(buffer);
-            mek._mediaType = contentType;
-        } catch (err) {
-            console.log('❌ [MMT BUSINESS HUB] Failed to pre-download media:', err.message);
-        }
+      try {
+        const stream = await downloadContentFromMessage(content, contentType.replace('Message', ''));
+        const buffer = [];
+        for await (const chunk of stream) buffer.push(chunk);
+        mek._mediaBuffer = Buffer.concat(buffer);
+        mek._mediaType = contentType;
+      } catch (err) {
+        console.log('❌ [MMT BUSINESS HUB] Failed to pre-download media:', err.message);
+      }
     }
 
     // Run plugins onMessage hooks
     if (global.pluginHooks) {
-        for (const plugin of global.pluginHooks) {
-            if (plugin.onMessage) {
-                try {
-                    await plugin.onMessage(conn, mek);
-                } catch (e) {
-                    console.log("[MMT BUSINESS HUB] onMessage error:", e);
-                }
-            }
+      for (const plugin of global.pluginHooks) {
+        if (plugin.onMessage) {
+          try {
+            await plugin.onMessage(conn, mek);
+          } catch (e) {
+            console.log("[MMT BUSINESS HUB] onMessage error:", e);
+          }
         }
+      }
     }
     
     mek.message = (getContentType(mek.message) === 'ephemeralMessage') 
-        ? mek.message.ephemeralMessage.message 
-        : mek.message;
+      ? mek.message.ephemeralMessage.message 
+      : mek.message;
 
     if (config.READ_MESSAGE === 'true') {
-        await conn.readMessages([mek.key]); 
-        console.log(`[MMT BUSINESS HUB] Marked message from ${from} as read.`);
+      await conn.readMessages([mek.key]); 
+      console.log(`[MMT BUSINESS HUB] Marked message from ${mek.key.remoteJid} as read.`);
     }
 
     if (mek.key?.remoteJid === 'status@broadcast') {
-        const senderJid = mek.key.participant || mek.key.remoteJid || "unknown@s.whatsapp.net";
-        const mentionJid = senderJid.includes("@s.whatsapp.net") ? senderJid : senderJid + "@s.whatsapp.net";
+      const senderJid = mek.key.participant || mek.key.remoteJid || "unknown@s.whatsapp.net";
+      const mentionJid = senderJid.includes("@s.whatsapp.net") ? senderJid : senderJid + "@s.whatsapp.net";
 
-        if (config.AUTO_STATUS_SEEN === "true") {
-            try {
-                await conn.readMessages([mek.key]);
-                console.log(`[MMT BUSINESS HUB] Status seen: ${mek.key.id}`);
-            } catch (e) {
-                console.error("❌ [MMT BUSINESS HUB] Failed to mark status as seen:", e);
-            }
+      if (config.AUTO_STATUS_SEEN === "true") {
+        try {
+          await conn.readMessages([mek.key]);
+          console.log(`[MMT BUSINESS HUB] Status seen: ${mek.key.id}`);
+        } catch (e) {
+          console.error("❌ [MMT BUSINESS HUB] Failed to mark status as seen:", e);
         }
+      }
 
-        if (config.AUTO_STATUS_REACT === "true" && mek.key.participant) {
-            try {
-                const emojis = ['❤️', '💸', '😇', '🍂', '💥', '💯', '🔥', '💫', '💎', '💗', '🤍', '🖤', '👀', '🙌', '🙆', '🚩', '🥰', '💐', '😎', '🤎', '✅', '🫀', '🧡', '😁', '😄', '🌸', '🕊️', '🌷', '⛅', '🌟', '🗿', '💜', '💙', '🌝', '🖤', '💚'];
-                const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
+      if (config.AUTO_STATUS_REACT === "true" && mek.key.participant) {
+        try {
+          const emojis = ['❤️', '💸', '😇', '🍂', '💥', '💯', '🔥', '💫', '💎', '💗', '🤍', '🖤', '👀', '🙌', '🙆', '🚩', '🥰', '💐', '😎', '🤎', '✅', '🫀', '🧡', '😁', '😄', '🌸', '🕊️', '🌷', '⛅', '🌟', '🗿', '💜', '💙', '🌝', '🖤', '💚'];
+          const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
 
-                await conn.sendMessage(mek.key.participant, {
-                    react: {
-                        text: randomEmoji,
-                        key: mek.key,
-                    }
-                });
-
-                console.log(`[MMT BUSINESS HUB] Reacted to status of ${mek.key.participant} with ${randomEmoji}`);
-            } catch (e) {
-                console.error("❌ [MMT BUSINESS HUB] Failed to react to status:", e);
+          await conn.sendMessage(mek.key.participant, {
+            react: {
+              text: randomEmoji,
+              key: mek.key,
             }
+          });
+
+          console.log(`[MMT BUSINESS HUB] Reacted to status of ${mek.key.participant} with ${randomEmoji}`);
+        } catch (e) {
+          console.error("❌ [MMT BUSINESS HUB] Failed to react to status:", e);
         }
+      }
     }
 
     const m = sms(conn, mek);
     const type = getContentType(mek.message);
+    const from = mek.key.remoteJid;
     const body = type === 'conversation'
-        ? mek.message.conversation
-        : mek.message[type]?.text || mek.message[type]?.caption || '';
+      ? mek.message.conversation
+      : mek.message[type]?.text || mek.message[type]?.caption || '';
 
     const isCmd = body.startsWith(prefix);
     const commandName = isCmd ? body.slice(prefix.length).trim().split(" ")[0].toLowerCase() : '';
@@ -412,8 +345,8 @@ async function connectToWA() {
     const q = args.join(' ');
 
     const sender = mek.key.fromMe 
-        ? (conn.user.id.split(':')[0]+'@s.whatsapp.net' || conn.user.id) 
-        : (mek.key.participant || mek.key.remoteJid);
+      ? (conn.user.id.split(':')[0]+'@s.whatsapp.net' || conn.user.id) 
+      : (mek.key.participant || mek.key.remoteJid);
 
     const senderNumber = sender.split('@')[0];
     const isGroup = from.endsWith('@g.us');
@@ -441,57 +374,57 @@ async function connectToWA() {
     const reply = (text, options = {}) => conn.sendMessage(from, { text, ...options }, { quoted: mek });
 
     conn.decodeJid = jid => {
-        if (!jid) return jid;
-        if (/:\d+@/gi.test(jid)) {
-            let decode = jidDecode(jid) || {};
-            return (
-                (decode.user &&
-                    decode.server &&
-                    decode.user + '@' + decode.server) ||
-                jid
-            );
-        } else return jid;
+      if (!jid) return jid;
+      if (/:\d+@/gi.test(jid)) {
+        let decode = jidDecode(jid) || {};
+        return (
+          (decode.user &&
+            decode.server &&
+            decode.user + '@' + decode.server) ||
+          jid
+        );
+      } else return jid;
     };
 
     if (isCmd) {
-        const cmd = commands.find((c) => c.pattern === commandName || (c.alias && c.alias.includes(commandName)));
-        if (cmd) {
-            switch ((config.MODE || 'public').toLowerCase()) {
-                case 'private':
-                    if (!isOwner) return;
-                    break;
-                case 'public':
-                default:
-                    break;
-            }
-            
-            if (cmd.react) conn.sendMessage(from, { react: { text: cmd.react, key: mek.key } });
-
-            try {
-                cmd.function(conn, mek, m, {
-                    from, quoted: mek, body, isCmd, command: commandName, args, q,
-                    isGroup, sender, senderNumber, botNumber2, botNumber, pushname,
-                    isMe, isOwner, groupMetadata, groupName, participants, groupAdmins,
-                    isBotAdmins, isAdmins, reply,
-                });
-            } catch (e) {
-                console.error("[MMT BUSINESS HUB] PLUGIN ERROR: " + e);
-            }
+      const cmd = commands.find((c) => c.pattern === commandName || (c.alias && c.alias.includes(commandName)));
+      if (cmd) {
+        switch ((config.MODE || 'public').toLowerCase()) {
+          case 'private':
+            if (!isOwner) return;
+            break;
+          case 'public':
+          default:
+            break;
         }
+        
+        if (cmd.react) conn.sendMessage(from, { react: { text: cmd.react, key: mek.key } });
+
+        try {
+          cmd.function(conn, mek, m, {
+            from, quoted: mek, body, isCmd, command: commandName, args, q,
+            isGroup, sender, senderNumber, botNumber2, botNumber, pushname,
+            isMe, isOwner, groupMetadata, groupName, participants, groupAdmins,
+            isBotAdmins, isAdmins, reply,
+          });
+        } catch (e) {
+          console.error("[MMT BUSINESS HUB] PLUGIN ERROR: " + e);
+        }
+      }
     }
 
     const replyText = body;
     for (const handler of replyHandlers) {
-        if (handler.filter(replyText, { sender, message: mek })) {
-            try {
-                await handler.function(conn, mek, m, {
-                    from, quoted: mek, body: replyText, sender, reply,
-                });
-                break;
-            } catch (e) {
-                console.log("[MMT BUSINESS HUB] Reply handler error:", e);
-            }
+      if (handler.filter(replyText, { sender, message: mek })) {
+        try {
+          await handler.function(conn, mek, m, {
+            from, quoted: mek, body: replyText, sender, reply,
+          });
+          break;
+        } catch (e) {
+          console.log("[MMT BUSINESS HUB] Reply handler error:", e);
         }
+      }
     }
   });
 
