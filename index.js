@@ -111,18 +111,9 @@ async function fetchServicesPage() {
     } catch (error) {
       console.error(`❌ [MMT BUSINESS HUB] Attempt ${attempt}/${maxRetries} failed:`, error.message);
       
-      // If this is the last attempt, give up and use existing cache
+      // If this is the last attempt, throw error to stop bot startup
       if (attempt === maxRetries) {
-        console.log(`💤 [MMT BUSINESS HUB] All ${maxRetries} attempts failed. Using existing cache or starting without services.`);
-        
-        // If we have existing cache, use it
-        if (serviceCache.data) {
-          console.log(`📦 [MMT BUSINESS HUB] Using existing cache with ${serviceCache.data.length} services`);
-          return serviceCache.data;
-        } else {
-          console.log(`⚠️ [MMT BUSINESS HUB] No cache available. Starting bot without services data.`);
-          return [];
-        }
+        throw new Error(`All ${maxRetries} attempts failed. Cannot start bot without services data.`);
       }
       
       // Wait before retrying
@@ -183,24 +174,26 @@ const { replyHandlers, commands } = require('./command');
 const antiDeletePlugin = require('./plugins/antidelete.js');
 global.pluginHooks = global.pluginHooks || [];
 global.pluginHooks.push(antiDeletePlugin);
-const autoGreetingsPlugin = require('./plugins/ai.js');
-global.pluginHooks.push(autoGreetingsPlugin);
-
 
 async function connectToWA() {
   console.log("🛰️ [MMT BUSINESS HUB] Initializing WhatsApp connection...");
   
-  // Pre-load services when bot starts (non-blocking)
-  console.log("📥 [MMT BUSINESS HUB] Pre-loading services cache...");
-  fetchServicesPage().then(services => {
+  try {
+    // Pre-load services when bot starts (BLOCKING - bot won't start without services)
+    console.log("📥 [MMT BUSINESS HUB] Pre-loading services cache (required for bot startup)...");
+    const services = await fetchServicesPage();
+    
     if (services && services.length > 0) {
-      console.log(`✅ [MMT BUSINESS HUB] Services pre-loaded: ${services.length} items`);
+      console.log(`✅ [MMT BUSINESS HUB] Services pre-loaded successfully: ${services.length} items`);
     } else {
-      console.log(`⚠️ [MMT BUSINESS HUB] Services pre-load completed with no data`);
+      throw new Error("No services loaded from the website");
     }
-  }).catch(error => {
-    console.log(`⚠️ [MMT BUSINESS HUB] Services pre-load failed: ${error.message}`);
-  });
+    
+  } catch (error) {
+    console.error(`🚫 [MMT BUSINESS HUB] CRITICAL: ${error.message}`);
+    console.log("💤 [MMT BUSINESS HUB] Bot startup cancelled. Services are required for operation.");
+    process.exit(1); // Exit the process
+  }
   
   const { state, saveCreds } = await useMultiFileAuthState(__dirname + '/auth_info_baileys/');
   const { version } = await fetchLatestBaileysVersion();
