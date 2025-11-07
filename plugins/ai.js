@@ -2,7 +2,7 @@ const axios = require("axios");
 
 const channelJid = '120363423526129509@newsletter'; 
 const channelName = 'ミ★ 𝙈𝙈𝙏 𝘽𝙐𝙎𝙄𝙉𝙀𝙎𝙎 𝙃𝙐𝘽 ★彡'; 
-const serviceLogo = "https://github.com/mmtbusinesshub/MMT/blob/main/images/WhatsApp%20Image%202025-10-31%20at%2014.04.59_cae3e6bf.jpg?raw=true";
+const serviceLogo = "https://github.com/mmtbusinesshub/MMT/blob/main/images/download.png?raw=true";
 
 function numberToEmoji(num) {
   const emojis = ["0️⃣","1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣"];
