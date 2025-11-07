@@ -149,34 +149,14 @@ function findMatchingServices(query, services) {
   return filteredServices;
 }
 
-// Enhanced message formatting functions
-function createServiceCard(service, index) {
+// Universal formatting functions for all devices
+function createServiceItem(service, index) {
   const emoji = numberToEmoji(index + 1);
-  return `╭─ ${emoji} *${service.name}*
-│  💰 *Price:* ${service.price}
-│  📊 *Quantity:* ${service.min}-${service.max}
-│  🔗 *Order:* ${service.link}
-╰─━━━━━━━━━━━━━━━━━━━─╯`;
+  return `${emoji} *${service.name}*\n   💰 ${service.price} | 📦 ${service.min}-${service.max}\n   🔗 ${service.link}\n`;
 }
 
-function createCategoryHeader(category) {
-  return `┌─✦ *${category.toUpperCase()}* ✦─┐`;
-}
-
-function createHeader(title, subtitle = "") {
-  let header = `╭━━━✦⋅⋆ *${title}* ⋆⋅✦━━━╮\n`;
-  if (subtitle) {
-    header += `│ ${subtitle}\n`;
-  }
-  header += `│─────────────────────────`;
-  return header;
-}
-
-function createFooter(contact = "wa.me/94759125207", website = "https://makemetrend.online") {
-  return `│─────────────────────────
-│ 📞 *Support:* ${contact}
-│ 🌐 *Website:* ${website}
-╰━━━━━━━━━━━━━━━━━━━━━━━╯`;
+function createSectionSeparator() {
+  return "────────────────────";
 }
 
 module.exports = {
@@ -260,14 +240,16 @@ module.exports = {
           const topPlatformServices = getTopServices(platformServices).slice(0, 5);
           
           if (topPlatformServices.length > 0) {
-            let replyText = createHeader(`${detectedPlatform.toUpperCase()} SERVICES`, "Popular Services Available");
+            let replyText = `🎯 *${detectedPlatform.toUpperCase()} SERVICES*\n${createSectionSeparator()}\n*Popular Services Available*\n\n`;
             
             topPlatformServices.forEach((service, i) => {
-              replyText += `\n${createServiceCard(service, i)}`;
+              replyText += createServiceItem(service, i) + "\n";
             });
             
-            replyText += `\n\n│ 💡 *Tip:* Use "${detectedPlatform} likes 1$-5$" for budget-specific results`;
-            replyText += `\n${createFooter()}`;
+            replyText += `${createSectionSeparator()}\n`;
+            replyText += `💡 *Tip:* Use "${detectedPlatform} likes 1$-5$" for budget-specific results\n\n`;
+            replyText += `📞 *Support:* wa.me/94759125207\n`;
+            replyText += `🌐 *Website:* https://makemetrend.online`;
             
             await conn.sendMessage(from, {
               image: { url: serviceLogo },
@@ -303,14 +285,16 @@ module.exports = {
             .slice(0, 6);
 
           if (popularServices.length > 0) {
-            let replyText = createHeader("POPULAR SERVICES", "Top Social Media Solutions");
+            let replyText = `🌟 *POPULAR SOCIAL MEDIA SERVICES*\n${createSectionSeparator()}\n*Top Performing Solutions*\n\n`;
             
             popularServices.forEach((service, i) => {
-              replyText += `\n${createServiceCard(service, i)}`;
+              replyText += createServiceItem(service, i) + "\n";
             });
             
-            replyText += `\n\n│ 💡 *Pro Tip:* Specify platform + budget for exact matches`;
-            replyText += `\n${createFooter()}`;
+            replyText += `${createSectionSeparator()}\n`;
+            replyText += `💡 *Pro Tip:* Specify platform + budget for exact matches\n\n`;
+            replyText += `📞 *Support:* wa.me/94759125207\n`;
+            replyText += `🌐 *Website:* https://makemetrend.online`;
             
             await conn.sendMessage(from, {
               image: { url: serviceLogo },
@@ -343,23 +327,23 @@ module.exports = {
       const platforms = ['instagram', 'facebook', 'tiktok', 'youtube'];
       const detectedPlatform = platforms.find(platform => msg.includes(platform));
       
-      let headerTitle = "MATCHING SERVICES";
-      let headerSubtitle = "Services Matching Your Criteria";
+      let header = "🎯 *MATCHING SERVICES FOUND*";
+      let subtitle = "Services Matching Your Criteria";
       
       if (priceRange && detectedPlatform) {
-        headerTitle = `${detectedPlatform.toUpperCase()} SERVICES`;
-        headerSubtitle = `Budget: $${priceRange.min}-$${priceRange.max}`;
+        header = `🎯 *${detectedPlatform.toUpperCase()} SERVICES*`;
+        subtitle = `Budget Range: $${priceRange.min} - $${priceRange.max}`;
       } else if (detectedPlatform) {
-        headerTitle = `BEST ${detectedPlatform.toUpperCase()} SERVICES`;
-        headerSubtitle = "Top Value & Premium Options";
+        header = `🚀 *BEST ${detectedPlatform.toUpperCase()} SERVICES*`;
+        subtitle = "Top Value & Premium Options";
       } else if (priceRange) {
-        headerTitle = "BUDGET SERVICES";
-        headerSubtitle = `Price Range: $${priceRange.min}-$${priceRange.max}`;
+        header = `💰 *BUDGET SERVICES*`;
+        subtitle = `Price Range: $${priceRange.min} - $${priceRange.max}`;
       }
 
-      let messageText = createHeader(headerTitle, headerSubtitle);
+      let messageText = `${header}\n${createSectionSeparator()}\n${subtitle}\n\n`;
 
-      // Group by category with beautiful formatting
+      // Group by category
       const matchesByCategory = {};
       matches.forEach(service => {
         if (!matchesByCategory[service.category]) {
@@ -370,22 +354,26 @@ module.exports = {
 
       let serviceCount = 0;
       Object.entries(matchesByCategory).forEach(([category, categoryServices]) => {
-        messageText += `\n${createCategoryHeader(category)}`;
+        messageText += `📂 *${category.toUpperCase()}*\n\n`;
         
         categoryServices.forEach((service) => {
-          messageText += `\n${createServiceCard(service, serviceCount)}`;
+          messageText += createServiceItem(service, serviceCount);
           serviceCount++;
+          messageText += "\n";
         });
+        
+        messageText += `${createSectionSeparator()}\n\n`;
       });
 
       // Add results summary
       if (priceRange && matches.length > 0) {
-        messageText += `\n\n│ ✅ *Results:* ${matches.length} services in your budget`;
+        messageText += `✅ *Found ${matches.length} services in your budget*\n\n`;
       } else if (detectedPlatform && !priceRange) {
-        messageText += `\n\n│ 💡 *Tip:* Add budget like "${detectedPlatform} 1$-5$" for exact pricing`;
+        messageText += `💡 *Pro Tip:* Add budget like "${detectedPlatform} 1$-5$" for exact pricing\n\n`;
       }
       
-      messageText += `\n${createFooter()}`;
+      messageText += `📞 *Support:* wa.me/94759125207\n`;
+      messageText += `🌐 *Website:* https://makemetrend.online`;
 
       await conn.sendMessage(from, {
         image: { url: serviceLogo },
