@@ -7,7 +7,7 @@ function convertToBool(text, fault = 'true') {
 
 const defaultConfig = {
   SESSION_ID: "", // Put your session id here
-  ALIVE_IMG: "https://github.com/mmtbusinesshub/MMT/blob/main/images/WhatsApp%20Image%202025-10-31%20at%2014.04.59_cae3e6bf.jpg?raw=true",
+  ALIVE_IMG: "https://github.com/mmtbusinesshub/MMT/blob/main/images/download.png?raw=true",
   ALIVE_MSG: "",
   BOT_OWNER: "94774915917", // Replace your bot owner number here with 94(country code)
   ownerNumber: ["94774915917"], // Replace your bot owner number here (same as bot owner number)
