@@ -228,7 +228,7 @@ async function connectToWA() {
       console.log("📶 [MMT BUSINESS HUB] Successfully connected to WhatsApp!");
 
       const up = `
-╭━━━〔 🚀 *MMT BUSINESS HUB* 🚀〕━━━━━━╮
+╭━〔 🚀 *MMT BUSINESS HUB* 🚀
 ┃                                           
 ┃ ✅ *Connection Status* : ONLINE        
 ┃ 👑 *Auto-Reply System* : ACTIVATED     
@@ -236,23 +236,15 @@ async function connectToWA() {
 ┃ 💠 *Powered By* : WhatsApp Business API
 ┃ 📊 *Services Cached* : ${serviceCache.data ? serviceCache.data.length : 0} items
 ┃                                           
-╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯
+╰━━━━━━━━━━━━━━━━━━━━╯
 
 🌟 *Social Media Marketing Assistant Ready!*  
 
-📊 *Services Available:*
-• Social Media Management
-• Content Creation & Strategy
-• Facebook/Instagram Ads
-• YouTube Optimization
-• LinkedIn Marketing
-• TikTok Campaigns
-
-💼 *Use *.menu* to explore all features*
-🔹 *Use *.services* for pricing*
-🔹 *Use *.help* for assistance*
+💼 *Use .ping to test is bot alive or not*
+🔹 *Use *bank details* for get bank details*
 
 🎯 *Growing Your Business, One Click at a Time!*
+╰━━━━━━━━━━━━━━━━━━━━╯
 `;
       conn.sendMessage(ownerNumber[0] + "@s.whatsapp.net", {
         image: { url: config.ALIVE_IMG },
@@ -457,5 +449,6 @@ app.listen(port, () => console.log(`🌐 [MMT BUSINESS HUB] Web server running �
 setTimeout(() => {
   connectToWA();
 }, 4000);
+
 
 
