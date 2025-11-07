@@ -36,8 +36,8 @@ Name: Samsul nisa`,
 };
 
 const bankKeywords = [
-  'bank', 'payment', 'transfer', 'deposit', 'account', 
-  'details', 'payment details', 'bank details', 'send money',
+  'bank', 'payment', 'transfer', 'deposit', 
+  'payment details', 'bank details', 'send money',
   'pay', 'payment method', 'bank account', 'account number'
 ];
 
