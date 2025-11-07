@@ -2,7 +2,6 @@ const axios = require("axios");
 
 const channelJid = '120363423526129509@newsletter'; 
 const channelName = 'ミ★ 𝙈𝙈𝙏 𝘽𝙐𝙎𝙄𝙉𝙀𝙎𝙎 𝙃𝙐𝘽 ★彡'; 
-
 const serviceLogo = "https://github.com/mmtbusinesshub/MMT/blob/main/images/WhatsApp%20Image%202025-10-31%20at%2014.04.59_cae3e6bf.jpg?raw=true";
 
 function numberToEmoji(num) {
@@ -150,6 +149,36 @@ function findMatchingServices(query, services) {
   return filteredServices;
 }
 
+// Enhanced message formatting functions
+function createServiceCard(service, index) {
+  const emoji = numberToEmoji(index + 1);
+  return `╭─ ${emoji} *${service.name}*
+│  💰 *Price:* ${service.price}
+│  📊 *Quantity:* ${service.min}-${service.max}
+│  🔗 *Order:* ${service.link}
+╰─━━━━━━━━━━━━━━━━━━━─╯`;
+}
+
+function createCategoryHeader(category) {
+  return `┌─✦ *${category.toUpperCase()}* ✦─┐`;
+}
+
+function createHeader(title, subtitle = "") {
+  let header = `╭━━━✦⋅⋆ *${title}* ⋆⋅✦━━━╮\n`;
+  if (subtitle) {
+    header += `│ ${subtitle}\n`;
+  }
+  header += `│─────────────────────────`;
+  return header;
+}
+
+function createFooter(contact = "wa.me/94759125207", website = "https://makemetrend.online") {
+  return `│─────────────────────────
+│ 📞 *Support:* ${contact}
+│ 🌐 *Website:* ${website}
+╰━━━━━━━━━━━━━━━━━━━━━━━╯`;
+}
+
 module.exports = {
   onMessage: async (conn, mek) => {
     try {
@@ -178,6 +207,7 @@ module.exports = {
       
       if (!isServiceQuery) return;
 
+      // React with heart
       try {
         await conn.sendMessage(from, {
           react: {
@@ -198,7 +228,7 @@ module.exports = {
           await conn.sendMessage(
             from,
             { 
-              text: "⚠️ *Service Information Temporarily Unavailable*\n\nOur service catalog is currently being updated. Please try again in a few moments or visit our website directly:\n\n🌐 https://makemetrend.online/services\n\nThank you for your patience! 🙏" 
+              text: "🔸 *Service Update*\n\nOur service catalog is currently being refreshed. Please check back in a few moments.\n\n📍 Visit: https://makemetrend.online/services\n\nThank you for your understanding! 🙏" 
             },
             { quoted: mek }
           );
@@ -212,7 +242,7 @@ module.exports = {
         await conn.sendMessage(
           from,
           { 
-            text: "❌ *Service Update in Progress*\n\nWe're currently refreshing our service database. Please try again shortly or contact us for immediate assistance.\n\n📞 *Contact Support:* wa.me/94759125207" 
+            text: "🔸 *System Maintenance*\n\nWe're currently upgrading our service database for better performance.\n\n📞 Immediate assistance: wa.me/94759125207" 
           },
           { quoted: mek }
         );
@@ -222,7 +252,6 @@ module.exports = {
       const matches = findMatchingServices(text, services);
 
       if (matches.length === 0) {
-        // Show platform-specific suggestions if no matches found
         const platforms = ['instagram', 'facebook', 'tiktok', 'youtube'];
         const detectedPlatform = platforms.find(platform => msg.includes(platform));
         
@@ -231,11 +260,14 @@ module.exports = {
           const topPlatformServices = getTopServices(platformServices).slice(0, 5);
           
           if (topPlatformServices.length > 0) {
-            const serviceList = topPlatformServices
-              .map((service, i) => `${numberToEmoji(i + 1)} *${service.name}*\n   💰 ${service.price} | 📦 ${service.min}-${service.max}`)
-              .join("\n\n");
-
-            const replyText = `🔍 *${detectedPlatform.charAt(0).toUpperCase() + detectedPlatform.slice(1)} Services*\n\nHere are our popular ${detectedPlatform} services:\n\n${serviceList}\n\n💡 *Need specific pricing?* Try: "${detectedPlatform} likes 1$-5$"\n\n🌐 View all: https://makemetrend.online/services`;
+            let replyText = createHeader(`${detectedPlatform.toUpperCase()} SERVICES`, "Popular Services Available");
+            
+            topPlatformServices.forEach((service, i) => {
+              replyText += `\n${createServiceCard(service, i)}`;
+            });
+            
+            replyText += `\n\n│ 💡 *Tip:* Use "${detectedPlatform} likes 1$-5$" for budget-specific results`;
+            replyText += `\n${createFooter()}`;
             
             await conn.sendMessage(from, {
               image: { url: serviceLogo },
@@ -254,7 +286,7 @@ module.exports = {
             await conn.sendMessage(
               from,
               { 
-                text: `🔍 *Service Not Found*\n\nWe don't have specific ${detectedPlatform} services at the moment. Please check our website for all available services:\n\n🌐 https://makemetrend.online/services\n\nOr contact us for custom solutions! 📞` 
+                text: `🔸 *Service Catalog*\n\nCurrently no ${detectedPlatform} services available.\n\n📍 Browse all services: https://makemetrend.online/services\n\n💬 Custom solutions: wa.me/94759125207` 
               },
               { quoted: mek }
             );
@@ -271,11 +303,14 @@ module.exports = {
             .slice(0, 6);
 
           if (popularServices.length > 0) {
-            const popularList = popularServices
-              .map((s, i) => `${numberToEmoji(i + 1)} *${s.category}* - ${s.name}\n   💰 ${s.price} | 📦 ${s.min}-${s.max}`)
-              .join("\n\n");
-
-            const replyText = `🔍 *Popular Social Media Services*\n\nHere are our most popular services:\n\n${popularList}\n\n💡 *Tip:* Specify platform and budget like "instagram likes 1$-5$" for better results!\n\n🌐 View all: https://makemetrend.online/services`;
+            let replyText = createHeader("POPULAR SERVICES", "Top Social Media Solutions");
+            
+            popularServices.forEach((service, i) => {
+              replyText += `\n${createServiceCard(service, i)}`;
+            });
+            
+            replyText += `\n\n│ 💡 *Pro Tip:* Specify platform + budget for exact matches`;
+            replyText += `\n${createFooter()}`;
             
             await conn.sendMessage(from, {
               image: { url: serviceLogo },
@@ -291,11 +326,10 @@ module.exports = {
               }
             }, { quoted: mek });
           } else {
-            // Error message - NO IMAGE
             await conn.sendMessage(
               from,
               { 
-                text: "🔍 *Service Catalog*\n\nPlease specify what you're looking for:\n• Instagram likes\n• Facebook followers\n• TikTok views\n• YouTube comments\n\nOr visit: 🌐 https://makemetrend.online/services" 
+                text: "🔸 *Service Directory*\n\nSpecify your requirements:\n• Instagram followers\n• Facebook likes  \n• TikTok views\n• YouTube comments\n\n📍 Full catalog: https://makemetrend.online/services" 
               },
               { quoted: mek }
             );
@@ -304,23 +338,28 @@ module.exports = {
         return;
       }
 
+      // Create beautiful service matches response
       const priceRange = extractPriceRange(text);
       const platforms = ['instagram', 'facebook', 'tiktok', 'youtube'];
       const detectedPlatform = platforms.find(platform => msg.includes(platform));
       
-      let messageText = "";
+      let headerTitle = "MATCHING SERVICES";
+      let headerSubtitle = "Services Matching Your Criteria";
       
-      if (priceRange) {
-        messageText = `🎯 *Services in Your Budget (${priceRange.min}$ - ${priceRange.max}$)*\n\n`;
-        if (detectedPlatform) {
-          messageText = `🎯 *${detectedPlatform.charAt(0).toUpperCase() + detectedPlatform.slice(1)} Services in Your Budget (${priceRange.min}$ - ${priceRange.max}$)*\n\n`;
-        }
+      if (priceRange && detectedPlatform) {
+        headerTitle = `${detectedPlatform.toUpperCase()} SERVICES`;
+        headerSubtitle = `Budget: $${priceRange.min}-$${priceRange.max}`;
       } else if (detectedPlatform) {
-        messageText = `🎯 *Best ${detectedPlatform.charAt(0).toUpperCase() + detectedPlatform.slice(1)} Services*\n\n*Showing: 3 lowest priced + 2 premium services*\n\n`;
-      } else {
-        messageText = `🎯 *Matching Services Found*\n\n`;
+        headerTitle = `BEST ${detectedPlatform.toUpperCase()} SERVICES`;
+        headerSubtitle = "Top Value & Premium Options";
+      } else if (priceRange) {
+        headerTitle = "BUDGET SERVICES";
+        headerSubtitle = `Price Range: $${priceRange.min}-$${priceRange.max}`;
       }
 
+      let messageText = createHeader(headerTitle, headerSubtitle);
+
+      // Group by category with beautiful formatting
       const matchesByCategory = {};
       matches.forEach(service => {
         if (!matchesByCategory[service.category]) {
@@ -329,26 +368,24 @@ module.exports = {
         matchesByCategory[service.category].push(service);
       });
 
-      Object.entries(matchesByCategory).forEach(([category, categoryServices], categoryIndex) => {
-        messageText += `📁 *${category}*\n\n`;
+      let serviceCount = 0;
+      Object.entries(matchesByCategory).forEach(([category, categoryServices]) => {
+        messageText += `\n${createCategoryHeader(category)}`;
         
-        categoryServices.forEach((service, serviceIndex) => {
-          const globalIndex = categoryIndex * categoryServices.length + serviceIndex + 1;
-          messageText += `${numberToEmoji(globalIndex)} *${service.name}*\n`;
-          messageText += `   💰 Price: ${service.price}\n`;
-          messageText += `   📊 Min: ${service.min} | Max: ${service.max}\n`;
-          messageText += `   🔗 [Buy Now](${service.link})\n\n`;
+        categoryServices.forEach((service) => {
+          messageText += `\n${createServiceCard(service, serviceCount)}`;
+          serviceCount++;
         });
       });
 
-      // Add helpful tips
+      // Add results summary
       if (priceRange && matches.length > 0) {
-        messageText += `💡 *Found ${matches.length} services in your budget!*\n`;
+        messageText += `\n\n│ ✅ *Results:* ${matches.length} services in your budget`;
       } else if (detectedPlatform && !priceRange) {
-        messageText += `💡 *Pro Tip:* Specify your budget like "${detectedPlatform} likes 1$-5$" for exact pricing!\n\n`;
+        messageText += `\n\n│ 💡 *Tip:* Add budget like "${detectedPlatform} 1$-5$" for exact pricing`;
       }
       
-      messageText += `\n📞 *Need Help?* Contact us: wa.me/94759125207\n🌐 *Website:* https://makemetrend.online`;
+      messageText += `\n${createFooter()}`;
 
       await conn.sendMessage(from, {
         image: { url: serviceLogo },
@@ -373,7 +410,7 @@ module.exports = {
         await conn.sendMessage(
           from,
           { 
-            text: "❌ *Service Error*\n\nWe're experiencing technical difficulties. Please try again in a few moments or contact support directly.\n\n📞 *Support:* wa.me/94759125207\n🌐 *Website:* https://makemetrend.online" 
+            text: "🔸 *Temporary Issue*\n\nWe're experiencing a technical difficulty. Our team has been notified.\n\n📞 Contact support: wa.me/94759125207\n📍 Website: https://makemetrend.online" 
           },
           { quoted: mek }
         );
