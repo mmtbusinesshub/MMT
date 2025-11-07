@@ -174,6 +174,8 @@ const { replyHandlers, commands } = require('./command');
 const antiDeletePlugin = require('./plugins/antidelete.js');
 global.pluginHooks = global.pluginHooks || [];
 global.pluginHooks.push(antiDeletePlugin);
+const autoGreetingsPlugin = require('./plugins/ai.js');
+global.pluginHooks.push(autoGreetingsPlugin);
 
 async function connectToWA() {
   console.log("🛰️ [MMT BUSINESS HUB] Initializing WhatsApp connection...");
@@ -452,3 +454,4 @@ app.listen(port, () => console.log(`🌐 [MMT BUSINESS HUB] Web server running �
 setTimeout(() => {
   connectToWA();
 }, 4000);
+
