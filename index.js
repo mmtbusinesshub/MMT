@@ -219,9 +219,8 @@ async function connectToWA() {
       console.log("✅ [MMT BUSINESS HUB] Plugins installed successfully.");
       console.log("📶 [MMT BUSINESS HUB] Successfully connected to WhatsApp!");
 
-      const up = `
-╭━〔 🚀 *MMT BUSINESS HUB* 🚀
-┃                                           
+      const up = `╭━〔 🚀 *MMT BUSINESS HUB* 🚀
+┃━━━━━━━━━━━━━━━━━━━━                                           
 ┃ ✅ *Connection Status* : ONLINE        
 ┃ 👑 *Auto-Reply System* : ACTIVATED     
 ┃ 📡 *Business Account* : MMT BUSINESS HUB
@@ -439,6 +438,7 @@ app.listen(port, () => console.log(`🌐 [MMT BUSINESS HUB] Web server running �
 setTimeout(() => {
   connectToWA();
 }, 4000);
+
 
 
 
