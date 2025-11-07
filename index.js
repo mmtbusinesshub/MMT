@@ -111,12 +111,10 @@ async function fetchServicesPage() {
     } catch (error) {
       console.error(`❌ [MMT BUSINESS HUB] Attempt ${attempt}/${maxRetries} failed:`, error.message);
       
-      // If this is the last attempt, throw error to stop bot startup
       if (attempt === maxRetries) {
         throw new Error(`All ${maxRetries} attempts failed. Cannot start bot without services data.`);
       }
       
-      // Wait before retrying
       if (attempt < maxRetries) {
         console.log(`⏳ [MMT BUSINESS HUB] Retrying in ${retryDelay/1000} seconds...`);
         await new Promise(resolve => setTimeout(resolve, retryDelay));
@@ -125,7 +123,6 @@ async function fetchServicesPage() {
   }
 }
 
-// Reset cache manually
 function resetServiceCache() {
   serviceCache.data = null;
   serviceCache.lastFetch = 0;
@@ -133,17 +130,14 @@ function resetServiceCache() {
   console.log("🔄 [MMT BUSINESS HUB] Service cache reset");
 }
 
-// Get services (uses cache if available and fresh)
 async function getServices() {
   const now = Date.now();
   
-  // Reset cache every 24 hours
   if (now - serviceCache.lastReset >= CACHE_DURATION) {
     console.log("🔄 [MMT BUSINESS HUB] Auto-resetting 24-hour cache...");
     resetServiceCache();
   }
   
-  // Fetch new data if cache is empty or older than 1 hour
   if (!serviceCache.data || now - serviceCache.lastFetch >= 60 * 60 * 1000) {
     return await fetchServicesPage();
   }
@@ -151,7 +145,6 @@ async function getServices() {
   return serviceCache.data || [];
 }
 
-// Make services available globally
 global.mmtServices = {
   getServices,
   resetServiceCache,
@@ -184,7 +177,6 @@ async function connectToWA() {
   console.log("🛰️ [MMT BUSINESS HUB] Initializing WhatsApp connection...");
   
   try {
-    // Pre-load services when bot starts (BLOCKING - bot won't start without services)
     console.log("📥 [MMT BUSINESS HUB] Pre-loading services cache (required for bot startup)...");
     const services = await fetchServicesPage();
     
@@ -197,7 +189,7 @@ async function connectToWA() {
   } catch (error) {
     console.error(`🚫 [MMT BUSINESS HUB] CRITICAL: ${error.message}`);
     console.log("💤 [MMT BUSINESS HUB] Bot startup cancelled. Services are required for operation.");
-    process.exit(1); // Exit the process
+    process.exit(1); 
   }
   
   const { state, saveCreds } = await useMultiFileAuthState(__dirname + '/auth_info_baileys/');
@@ -241,7 +233,7 @@ async function connectToWA() {
 🌟 *Social Media Marketing Assistant Ready!*  
 
 💼 *Use .ping to test is bot alive or not*
-🔹 *Use *bank details* for get bank details*
+🔹 *Use bank details for get bank details*
 
 🎯 *Growing Your Business, One Click at a Time!*
 ╰━━━━━━━━━━━━━━━━━━━━╯
@@ -253,7 +245,6 @@ async function connectToWA() {
     }
   });
 
-  // Rest of your existing code remains the same...
   conn.ev.on('creds.update', saveCreds);
 
   conn.ev.on('messages.upsert', async(mek) => {
@@ -275,7 +266,6 @@ async function connectToWA() {
       }
     }
 
-    // Run plugins onMessage hooks
     if (global.pluginHooks) {
       for (const plugin of global.pluginHooks) {
         if (plugin.onMessage) {
@@ -449,6 +439,7 @@ app.listen(port, () => console.log(`🌐 [MMT BUSINESS HUB] Web server running �
 setTimeout(() => {
   connectToWA();
 }, 4000);
+
 
 
 
