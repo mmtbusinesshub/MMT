@@ -1,14 +1,10 @@
-// plugins/ai.js - MMT BUSINESS HUB Auto Services Plugin
 const axios = require("axios");
 
-// WhatsApp Channel Info
-const channelJid = '120363423526129509@newsletter'; // Replace with your actual channel JID
-const channelName = '*MAKE ME TREND! 🔥*'; // Replace with your channel name
+const channelJid = '120363423526129509@newsletter'; 
+const channelName = 'ミ★ 𝙈𝙈𝙏 𝘽𝙐𝙎𝙄𝙉𝙀𝙎𝙎 𝙃𝙐𝘽 ★彡'; 
 
-// Service Logo/Banner
 const serviceLogo = "https://github.com/mmtbusinesshub/MMT/blob/main/images/WhatsApp%20Image%202025-10-31%20at%2014.04.59_cae3e6bf.jpg?raw=true";
 
-// Convert number to emoji
 function numberToEmoji(num) {
   const emojis = ["0️⃣","1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣"];
   return String(num)
@@ -17,7 +13,6 @@ function numberToEmoji(num) {
     .join("");
 }
 
-// Normalize text for matching
 function normalize(text) {
   return text
     .toLowerCase()
@@ -26,13 +21,11 @@ function normalize(text) {
     .trim();
 }
 
-// Extract price range from message
 function extractPriceRange(message) {
   const priceRegex = /(\d+)\s*\$?\s*-\s*\$?\s*(\d+)\s*\$/i;
   const singlePriceRegex = /(\d+)\s*\$/gi;
   const matches = [];
   
-  // Check for range like "1$ - 2$"
   const rangeMatch = message.match(priceRegex);
   if (rangeMatch) {
     return {
@@ -42,7 +35,6 @@ function extractPriceRange(message) {
     };
   }
   
-  // Check for single prices
   let singleMatch;
   const prices = [];
   while ((singleMatch = singlePriceRegex.exec(message)) !== null) {
@@ -58,7 +50,7 @@ function extractPriceRange(message) {
   } else if (prices.length === 1) {
     return {
       min: prices[0],
-      max: prices[0] + 10, // Add buffer for single price
+      max: prices[0] + 10, 
       type: 'single'
     };
   }
@@ -66,13 +58,11 @@ function extractPriceRange(message) {
   return null;
 }
 
-// Extract numeric price from service price string
 function extractNumericPrice(priceStr) {
   const match = priceStr.match(/(\d+\.?\d*)/);
   return match ? parseFloat(match[1]) : 0;
 }
 
-// Filter services by platform and type
 function filterServicesByPlatform(services, platform, serviceType = 'likes') {
   const platformLower = platform.toLowerCase();
   const typeLower = serviceType.toLowerCase();
@@ -81,20 +71,18 @@ function filterServicesByPlatform(services, platform, serviceType = 'likes') {
     const serviceName = normalize(service.name);
     const serviceCategory = normalize(service.category);
     
-    // Check if service matches platform and type
     const matchesPlatform = serviceName.includes(platformLower) || 
                            serviceCategory.includes(platformLower);
     
     const matchesType = serviceName.includes(typeLower) || 
                        serviceCategory.includes(typeLower) ||
-                       serviceName.includes('follower') || // Include followers if likes not found
+                       serviceName.includes('follower') || 
                        serviceCategory.includes('follower');
     
     return matchesPlatform && matchesType;
   });
 }
 
-// Filter services by price range
 function filterServicesByPrice(services, priceRange) {
   return services.filter(service => {
     const servicePrice = extractNumericPrice(service.price);
@@ -102,7 +90,6 @@ function filterServicesByPrice(services, priceRange) {
   });
 }
 
-// Sort services by price
 function sortServicesByPrice(services, ascending = true) {
   return services.sort((a, b) => {
     const priceA = extractNumericPrice(a.price);
@@ -111,7 +98,6 @@ function sortServicesByPrice(services, ascending = true) {
   });
 }
 
-// Get top services - lowest 3 and highest 2
 function getTopServices(services) {
   if (services.length <= 5) return services;
   
@@ -122,20 +108,17 @@ function getTopServices(services) {
   return [...lowest, ...highest];
 }
 
-// Find matching services with intelligent filtering
 function findMatchingServices(query, services) {
   if (!services || services.length === 0) return [];
   
   const normalizedQuery = normalize(query);
   
-  // Extract platform keywords
   const platforms = ['instagram', 'facebook', 'tiktok', 'youtube', 'telegram', 'twitter'];
   const serviceTypes = ['likes', 'followers', 'views', 'comments', 'shares'];
   
   let targetPlatform = null;
-  let targetServiceType = 'likes'; // Default to likes
+  let targetServiceType = 'likes'; 
   
-  // Detect platform
   for (const platform of platforms) {
     if (normalizedQuery.includes(platform)) {
       targetPlatform = platform;
@@ -143,7 +126,6 @@ function findMatchingServices(query, services) {
     }
   }
   
-  // Detect service type
   for (const type of serviceTypes) {
     if (normalizedQuery.includes(type)) {
       targetServiceType = type;
@@ -151,28 +133,23 @@ function findMatchingServices(query, services) {
     }
   }
   
-  // Extract price range
   const priceRange = extractPriceRange(query);
   
   let filteredServices = services;
   
-  // Filter by platform if specified
   if (targetPlatform) {
     filteredServices = filterServicesByPlatform(filteredServices, targetPlatform, targetServiceType);
   }
   
-  // Filter by price range if specified
   if (priceRange) {
     filteredServices = filterServicesByPrice(filteredServices, priceRange);
   } else if (targetPlatform) {
-    // If no price range specified but platform specified, get top services
     filteredServices = getTopServices(filteredServices);
   }
   
   return filteredServices;
 }
 
-// WhatsApp message handler
 module.exports = {
   onMessage: async (conn, mek) => {
     try {
@@ -195,18 +172,16 @@ module.exports = {
 
       console.log("🤖 [MMT BUSINESS HUB] Auto-services triggered:", msg);
 
-      // Check if message is related to services or pricing
       const serviceKeywords = ["price", "service", "cost", "buy", "purchase", "order", "rate", "charges", "facebook", "instagram", "youtube", "tiktok", "social media", "marketing", "followers", "likes", "views", "comments", "shares"];
       
       const isServiceQuery = serviceKeywords.some(keyword => msg.includes(keyword));
       
       if (!isServiceQuery) return;
 
-      // React with red heart to the message
       try {
         await conn.sendMessage(from, {
           react: {
-            text: "❤️", // Red heart emoji
+            text: "❤️", 
             key: mek.key,
           }
         });
@@ -215,7 +190,6 @@ module.exports = {
         console.log("⚠️ [MMT BUSINESS HUB] Could not react to message:", reactError.message);
       }
 
-      // Get services from cache
       let services;
       try {
         services = await global.mmtServices.getServices();
@@ -238,14 +212,13 @@ module.exports = {
         await conn.sendMessage(
           from,
           { 
-            text: "❌ *Service Update in Progress*\n\nWe're currently refreshing our service database. Please try again shortly or contact us for immediate assistance.\n\n📞 *Contact Support:* wa.me/947xxxxxxxx" 
+            text: "❌ *Service Update in Progress*\n\nWe're currently refreshing our service database. Please try again shortly or contact us for immediate assistance.\n\n📞 *Contact Support:* wa.me/947759125207" 
           },
           { quoted: mek }
         );
         return;
       }
 
-      // Find matching services with intelligent filtering
       const matches = findMatchingServices(text, services);
 
       if (matches.length === 0) {
@@ -264,7 +237,6 @@ module.exports = {
 
             const replyText = `🔍 *${detectedPlatform.charAt(0).toUpperCase() + detectedPlatform.slice(1)} Services*\n\nHere are our popular ${detectedPlatform} services:\n\n${serviceList}\n\n💡 *Need specific pricing?* Try: "${detectedPlatform} likes 1$-5$"\n\n🌐 View all: https://makemetrend.online/services`;
             
-            // SEND WITH IMAGE + CONTEXT INFO (Only for service replies)
             await conn.sendMessage(from, {
               image: { url: serviceLogo },
               caption: replyText,
@@ -279,7 +251,6 @@ module.exports = {
               }
             }, { quoted: mek });
           } else {
-            // Error message - NO IMAGE
             await conn.sendMessage(
               from,
               { 
@@ -289,7 +260,6 @@ module.exports = {
             );
           }
         } else {
-          // General fallback - NO IMAGE
           const popularServices = services
             .filter(s => 
               s.category.toLowerCase().includes("social") || 
@@ -307,7 +277,6 @@ module.exports = {
 
             const replyText = `🔍 *Popular Social Media Services*\n\nHere are our most popular services:\n\n${popularList}\n\n💡 *Tip:* Specify platform and budget like "instagram likes 1$-5$" for better results!\n\n🌐 View all: https://makemetrend.online/services`;
             
-            // SEND WITH IMAGE + CONTEXT INFO (Only for service replies)
             await conn.sendMessage(from, {
               image: { url: serviceLogo },
               caption: replyText,
@@ -335,7 +304,6 @@ module.exports = {
         return;
       }
 
-      // Create response message based on filter type
       const priceRange = extractPriceRange(text);
       const platforms = ['instagram', 'facebook', 'tiktok', 'youtube'];
       const detectedPlatform = platforms.find(platform => msg.includes(platform));
@@ -353,7 +321,6 @@ module.exports = {
         messageText = `🎯 *Matching Services Found*\n\n`;
       }
 
-      // Group matches by category
       const matchesByCategory = {};
       matches.forEach(service => {
         if (!matchesByCategory[service.category]) {
@@ -381,9 +348,8 @@ module.exports = {
         messageText += `💡 *Pro Tip:* Specify your budget like "${detectedPlatform} likes 1$-5$" for exact pricing!\n\n`;
       }
       
-      messageText += `\n📞 *Need Help?* Contact us: wa.me/947xxxxxxxx\n🌐 *Website:* https://makemetrend.online`;
+      messageText += `\n📞 *Need Help?* Contact us: wa.me/947759125207\n🌐 *Website:* https://makemetrend.online`;
 
-      // SEND WITH IMAGE + CONTEXT INFO (Only for successful service matches)
       await conn.sendMessage(from, {
         image: { url: serviceLogo },
         caption: messageText,
@@ -403,12 +369,11 @@ module.exports = {
     } catch (err) {
       console.error("❌ [MMT BUSINESS HUB] Auto-services plugin error:", err);
       
-      // Send error message to user - NO IMAGE
       try {
         await conn.sendMessage(
           from,
           { 
-            text: "❌ *Service Error*\n\nWe're experiencing technical difficulties. Please try again in a few moments or contact support directly.\n\n📞 *Support:* wa.me/947xxxxxxxx\n🌐 *Website:* https://makemetrend.online" 
+            text: "❌ *Service Error*\n\nWe're experiencing technical difficulties. Please try again in a few moments or contact support directly.\n\n📞 *Support:* wa.me/94759125207\n🌐 *Website:* https://makemetrend.online" 
           },
           { quoted: mek }
         );
