@@ -85,7 +85,7 @@ module.exports = {
         console.log("⚠️ [MMT BANK] Could not react to message:", reactError.message);
       }
 
-      const questionText = `🏦 *BANK DETAILS REQUEST*\n────────────────────\n\nPlease reply with which bank details you need:\n\n💳 *HNB Bank* - Type "HNB"\n💳 *BOC Bank* - Type "BOC"\n\nSimply reply with the bank name to get complete details.`;
+      const questionText = `🏦 *BANK DETAILS REQUEST*\n────────────────────\n\nPlease reply with which bank details you need:\n\n🇱🇰 *HNB Bank* - Type "HNB"\n🇱🇰 *BOC Bank* - Type "BOC"\n\nSimply reply with the bank name to get complete details.`;
 
       await conn.sendMessage(from, {
         image: { url: serviceLogo },
@@ -157,7 +157,7 @@ async function handleBankReply(conn, mek, text, from, sender) {
       console.log(`🏦 [MMT BANK] Sent ${selectedBank.name} details to ${sender}`);
 
     } else {
-      const errorMessage = `❌ *Invalid Bank Selection*\n────────────────────\n\nPlease choose one of the following:\n\n💳 *HNB Bank* - Reply "HNB"\n💳 *BOC Bank* - Reply "BOC"\n\nOr type "both" to get all bank details.`;
+      const errorMessage = `❌ *Invalid Bank Selection*\n────────────────────\n\nPlease choose one of the following:\n\n🇱🇰 *HNB Bank* - Reply "HNB"\n🇱🇰 *BOC Bank* - Reply "BOC"\n\nOr type "both" to get all bank details.`;
 
       await conn.sendMessage(from, {
         text: errorMessage
