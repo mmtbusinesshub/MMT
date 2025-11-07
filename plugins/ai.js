@@ -212,7 +212,7 @@ module.exports = {
         await conn.sendMessage(
           from,
           { 
-            text: "❌ *Service Update in Progress*\n\nWe're currently refreshing our service database. Please try again shortly or contact us for immediate assistance.\n\n📞 *Contact Support:* wa.me/947759125207" 
+            text: "❌ *Service Update in Progress*\n\nWe're currently refreshing our service database. Please try again shortly or contact us for immediate assistance.\n\n📞 *Contact Support:* wa.me/94759125207" 
           },
           { quoted: mek }
         );
@@ -348,7 +348,7 @@ module.exports = {
         messageText += `💡 *Pro Tip:* Specify your budget like "${detectedPlatform} likes 1$-5$" for exact pricing!\n\n`;
       }
       
-      messageText += `\n📞 *Need Help?* Contact us: wa.me/947759125207\n🌐 *Website:* https://makemetrend.online`;
+      messageText += `\n📞 *Need Help?* Contact us: wa.me/94759125207\n🌐 *Website:* https://makemetrend.online`;
 
       await conn.sendMessage(from, {
         image: { url: serviceLogo },
