@@ -1,6 +1,13 @@
 // plugins/ai.js - MMT BUSINESS HUB Auto Services Plugin
 const axios = require("axios");
 
+// WhatsApp Channel Info
+const channelJid = '120363423526129509@newsletter'; // Replace with your actual channel JID
+const channelName = '*MAKE ME TREND! 🔥*'; // Replace with your channel name
+
+// Service Logo/Banner
+const serviceLogo = "https://github.com/mmtbusinesshub/MMT/blob/main/images/WhatsApp%20Image%202025-10-31%20at%2014.04.59_cae3e6bf.jpg?raw=true";
+
 // Convert number to emoji
 function numberToEmoji(num) {
   const emojis = ["0️⃣","1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣"];
@@ -255,10 +262,24 @@ module.exports = {
               .map((service, i) => `${numberToEmoji(i + 1)} *${service.name}*\n   💰 ${service.price} | 📦 ${service.min}-${service.max}`)
               .join("\n\n");
 
-            const reply = `🔍 *${detectedPlatform.charAt(0).toUpperCase() + detectedPlatform.slice(1)} Services*\n\nHere are our popular ${detectedPlatform} services:\n\n${serviceList}\n\n💡 *Need specific pricing?* Try: "${detectedPlatform} likes 1$-5$"\n\n🌐 View all: https://makemetrend.online/services`;
+            const replyText = `🔍 *${detectedPlatform.charAt(0).toUpperCase() + detectedPlatform.slice(1)} Services*\n\nHere are our popular ${detectedPlatform} services:\n\n${serviceList}\n\n💡 *Need specific pricing?* Try: "${detectedPlatform} likes 1$-5$"\n\n🌐 View all: https://makemetrend.online/services`;
             
-            await conn.sendMessage(from, { text: reply }, { quoted: mek });
+            // SEND WITH IMAGE + CONTEXT INFO (Only for service replies)
+            await conn.sendMessage(from, {
+              image: { url: serviceLogo },
+              caption: replyText,
+              contextInfo: {
+                forwardingScore: 999,
+                isForwarded: true,
+                forwardedNewsletterMessageInfo: {
+                  newsletterJid: channelJid,
+                  newsletterName: channelName,
+                  serverMessageId: -1
+                }
+              }
+            }, { quoted: mek });
           } else {
+            // Error message - NO IMAGE
             await conn.sendMessage(
               from,
               { 
@@ -268,7 +289,7 @@ module.exports = {
             );
           }
         } else {
-          // General fallback
+          // General fallback - NO IMAGE
           const popularServices = services
             .filter(s => 
               s.category.toLowerCase().includes("social") || 
@@ -284,10 +305,24 @@ module.exports = {
               .map((s, i) => `${numberToEmoji(i + 1)} *${s.category}* - ${s.name}\n   💰 ${s.price} | 📦 ${s.min}-${s.max}`)
               .join("\n\n");
 
-            const reply = `🔍 *Popular Social Media Services*\n\nHere are our most popular services:\n\n${popularList}\n\n💡 *Tip:* Specify platform and budget like "instagram likes 1$-5$" for better results!\n\n🌐 View all: https://makemetrend.online/services`;
+            const replyText = `🔍 *Popular Social Media Services*\n\nHere are our most popular services:\n\n${popularList}\n\n💡 *Tip:* Specify platform and budget like "instagram likes 1$-5$" for better results!\n\n🌐 View all: https://makemetrend.online/services`;
             
-            await conn.sendMessage(from, { text: reply }, { quoted: mek });
+            // SEND WITH IMAGE + CONTEXT INFO (Only for service replies)
+            await conn.sendMessage(from, {
+              image: { url: serviceLogo },
+              caption: replyText,
+              contextInfo: {
+                forwardingScore: 999,
+                isForwarded: true,
+                forwardedNewsletterMessageInfo: {
+                  newsletterJid: channelJid,
+                  newsletterName: channelName,
+                  serverMessageId: -1
+                }
+              }
+            }, { quoted: mek });
           } else {
+            // Error message - NO IMAGE
             await conn.sendMessage(
               from,
               { 
@@ -348,9 +383,19 @@ module.exports = {
       
       messageText += `\n📞 *Need Help?* Contact us: wa.me/947xxxxxxxx\n🌐 *Website:* https://makemetrend.online`;
 
-      await conn.sendMessage(from, { 
-        text: messageText, 
-        linkPreview: false 
+      // SEND WITH IMAGE + CONTEXT INFO (Only for successful service matches)
+      await conn.sendMessage(from, {
+        image: { url: serviceLogo },
+        caption: messageText,
+        contextInfo: {
+          forwardingScore: 999,
+          isForwarded: true,
+          forwardedNewsletterMessageInfo: {
+            newsletterJid: channelJid,
+            newsletterName: channelName,
+            serverMessageId: -1
+          }
+        }
       }, { quoted: mek });
 
       console.log(`✅ [MMT BUSINESS HUB] Sent ${matches.length} filtered service matches to ${from}`);
@@ -358,7 +403,7 @@ module.exports = {
     } catch (err) {
       console.error("❌ [MMT BUSINESS HUB] Auto-services plugin error:", err);
       
-      // Send error message to user
+      // Send error message to user - NO IMAGE
       try {
         await conn.sendMessage(
           from,
