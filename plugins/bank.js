@@ -6,28 +6,28 @@ const pendingBankRequests = new Map();
 
 const bankDetails = {
   'hnb': {
-    name: '*HNB BANK TRANSFER*',
+    name: 'HNB BANK TRANSFER',
     details: `*HNB Bank - Nittambuwa Branch*
 *Name: M I M IFLAJ*
 *Account Number: 250020285400*`,
     emoji: '🎉'
   },
   'boc': {
-    name: '*BOC BANK TRANSFER*', 
+    name: 'BOC BANK TRANSFER', 
     details: `*BOC Bank - Nittambuwa Branch*
 *Account Number: 0091759510*
 *Name: Samsul nisa*`,
     emoji: '🎉'
   },
   'hnb bank': {
-    name: '*HNB BANK TRANSFER*',
+    name: 'HNB BANK TRANSFER',
     details: `*HNB Bank - Nittambuwa Branch*
 *Name: M I M IFLAJ*
 *Account Number: 250020285400*`,
     emoji: '🎉'
   },
   'boc bank': {
-    name: '*BOC BANK TRANSFER*',
+    name: 'BOC BANK TRANSFER',
     details: `*BOC Bank - Nittambuwa Branch*
 *Account Number: 0091759510*
 *Name: Samsul nisa*`,
