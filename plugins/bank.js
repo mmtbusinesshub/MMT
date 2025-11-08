@@ -85,7 +85,8 @@ module.exports = {
         console.log("⚠️ [MMT BANK] Could not react to message:", reactError.message);
       }
 
-      const questionText = `🏦 *BANK DETAILS REQUEST*\n────────────────────\n\nPlease reply with which bank details you need:\n\n🇱🇰 *HNB Bank* - Type "HNB"\n🇱🇰 *BOC Bank* - Type "BOC"\n\nSimply reply with the bank name to get complete details.`;
+      const questionText = `🏦 *BANK DETAILS REQUEST*\n────────────────────\n\nPlease reply with which bank details you need:\n\n🇱🇰 *HNB Bank* - Type "HNB"\n🇱🇰 *BOC Bank* - Type "BOC"\n\n⭕ *Simply reply with the bank name to get complete details.*\n\n⭕ *සම්පූර්න බැන්කු විස්තර ලබාගන්න බැන්කුවේ නම මේ මැසේජ් එකට රිප්ලයි කරන්න.*\n\n⭕ *முழுமையான வங்கி விவரங்களைப் பெற, வங்கியின் பெயருடன் இந்தச் செய்திக்குப் பதிலளிக்கவும்.*
+`;
 
       await conn.sendMessage(from, {
         image: { url: serviceLogo },
@@ -138,7 +139,7 @@ async function handleBankReply(conn, mek, text, from, sender) {
     }
 
     if (selectedBank) {
-      const bankMessage = `🏦 *PAYMENT DETAILS*\n────────────────────\n\n${selectedBank.emoji} *${selectedBank.name}*\n────────────────────\n${selectedBank.details}\n\n────────────────────\n💡 *Important:*\n• Always include your name in transfer description\n• Send payment confirmation to support\n• Contact for any payment issues\n\n📞 *Support:* wa.me/94759125207`;
+      const bankMessage = `🏦 *PAYMENT DETAILS*\n────────────────────\n\n${selectedBank.emoji} *${selectedBank.name}*\n────────────────────\n${selectedBank.details}\n\n────────────────────\n\n📞 *Support:* wa.me/94759125207`;
 
       await conn.sendMessage(from, {
         image: { url: serviceLogo },
@@ -157,7 +158,7 @@ async function handleBankReply(conn, mek, text, from, sender) {
       console.log(`🏦 [MMT BANK] Sent ${selectedBank.name} details to ${sender}`);
 
     } else {
-      const errorMessage = `❌ *Invalid Bank Selection*\n────────────────────\n\nPlease choose one of the following:\n\n🇱🇰 *HNB Bank* - Reply "HNB"\n🇱🇰 *BOC Bank* - Reply "BOC"\n\nOr type "both" to get all bank details.`;
+      const errorMessage = `❌ *Invalid Bank Selection*\n────────────────────\n\nPlease choose one of the following:\n\n🇱🇰 *HNB Bank* - Reply "HNB"\n🇱🇰 *BOC Bank* - Reply "BOC".`;
 
       await conn.sendMessage(from, {
         text: errorMessage
