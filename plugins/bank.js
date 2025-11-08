@@ -6,34 +6,35 @@ const pendingBankRequests = new Map();
 
 const bankDetails = {
   'hnb': {
-    name: 'HNB BANK TRANSFER',
-    details: `HNB Bank - Nittambuwa Branch
-Name: M I M IFLAJ 
-Account Number: 250020285400`,
+    name: '*HNB BANK TRANSFER*',
+    details: `*HNB Bank - Nittambuwa Branch*
+*Name: M I M IFLAJ*
+*Account Number: 250020285400*`,
     emoji: '🎉'
   },
   'boc': {
-    name: 'BOC BANK TRANSFER', 
-    details: `BOC Bank - Nittambuwa Branch
-Account Number: 0091759510
-Name: Samsul nisa`,
+    name: '*BOC BANK TRANSFER*', 
+    details: `*BOC Bank - Nittambuwa Branch*
+*Account Number: 0091759510*
+*Name: Samsul nisa*`,
     emoji: '🎉'
   },
   'hnb bank': {
-    name: 'HNB BANK TRANSFER',
-    details: `HNB Bank - Nittambuwa Branch
-Name: M I M IFLAJ 
-Account Number: 250020285400`,
+    name: '*HNB BANK TRANSFER*',
+    details: `*HNB Bank - Nittambuwa Branch*
+*Name: M I M IFLAJ*
+*Account Number: 250020285400*`,
     emoji: '🎉'
   },
   'boc bank': {
-    name: 'BOC BANK TRANSFER',
-    details: `BOC Bank - Nittambuwa Branch
-Account Number: 0091759510
-Name: Samsul nisa`,
+    name: '*BOC BANK TRANSFER*',
+    details: `*BOC Bank - Nittambuwa Branch*
+*Account Number: 0091759510*
+*Name: Samsul nisa*`,
     emoji: '🎉'
   }
 };
+
 
 const bankKeywords = [
   'bank', 'payment', 'transfer', 'deposit', 
@@ -139,7 +140,7 @@ async function handleBankReply(conn, mek, text, from, sender) {
     }
 
     if (selectedBank) {
-      const bankMessage = `🏦 *PAYMENT DETAILS*\n────────────────────\n${selectedBank.emoji} *${selectedBank.name}*\n────────────────────\n*${selectedBank.details}*\n────────────────────\n📞 *Support:* wa.me/94759125207`;
+      const bankMessage = `🏦 *PAYMENT DETAILS*\n────────────────────\n${selectedBank.emoji} *${selectedBank.name}*\n────────────────────\n${selectedBank.details}\n────────────────────\n📞 *Support:* wa.me/94759125207`;
 
       await conn.sendMessage(from, {
         image: { url: serviceLogo },
