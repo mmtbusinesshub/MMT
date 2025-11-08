@@ -6,7 +6,7 @@ function convertToBool(text, fault = 'true') {
 }
 
 const defaultConfig = {
-  SESSION_ID: "FAUzFTza#iN8AjiiYAqD7_8b-fIX8ike3PvGjlc_17cNMgwjm_hs", // Put your session id here
+  SESSION_ID: "VZNH3CRK#hV_q4UYl-fSTLh6LZtkbi3bFH_uL4s4QM-7-BQ-YMlU", // Put your session id here
   ALIVE_IMG: "https://github.com/mmtbusinesshub/MMT/blob/main/images/download.png?raw=true",
   ALIVE_MSG: "",
   BOT_OWNER: "94774915917", // Replace your bot owner number here with 94(country code)
