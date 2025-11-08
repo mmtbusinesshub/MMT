@@ -2,27 +2,32 @@ const { cmd } = require("../command");
 
 cmd(
   {
-    pattern: "debug",
-    react: "🐛",
-    desc: "Debug parameters",
-    category: "main",
+    pattern: "buttons",
+    react: "🎛️",
+    desc: "Test button message",
+    category: "test",
     filename: __filename,
   },
-  async (conn, mek, m, { from, reply }) => {
-    const debugInfo = `
-🔧 *DEBUG INFORMATION*
+  async (sock, mek, m, { reply }) => {
+    try {
+      const buttons = [
+        { buttonId: 'id1', buttonText: { displayText: '🌟 Button 1' }, type: 1 },
+        { buttonId: 'id2', buttonText: { displayText: '🔥 Button 2' }, type: 1 },
+        { buttonId: 'id3', buttonText: { displayText: '💎 Button 3' }, type: 1 },
+      ];
 
-📱 From: ${from}
-💬 Body: ${m.body || 'No body'}
-🔑 Key: ${JSON.stringify(m.key, null, 2)}
-👤 Sender: ${m.sender}
-🤖 Bot: ${conn.user.id}
+      const buttonMessage = {
+        text: "👋 *Hello!* This is a test button message.\n\nSelect an option below:",
+        footer: "MMT BUSINESS HUB • Test Menu",
+        buttons,
+        headerType: 1,
+      };
 
-📊 mek type: ${typeof mek}
-📊 m type: ${typeof m}
-    `;
-    
-    console.log("Debug info:", { from, mek, m });
-    await reply(debugInfo);
+      await sock.sendMessage(m.chat, buttonMessage, { quoted: mek });
+
+    } catch (e) {
+      console.error("❌ [TEST BUTTON PLUGIN] Error:", e);
+      await reply("⚠️ Failed to send button message.");
+    }
   }
 );
