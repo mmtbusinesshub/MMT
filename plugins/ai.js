@@ -149,14 +149,17 @@ function findMatchingServices(query, services) {
   return filteredServices;
 }
 
-// Universal formatting functions for all devices
-function createServiceItem(service, index) {
-  const emoji = numberToEmoji(index + 1);
-  return `${emoji} *${service.name}*\n   💰 ${service.price} | 📦 ${service.min}-${service.max}\n   🔗 ${service.link}\n`;
-}
+// ---------------------
+// ENHANCED FORMATTING
+// ---------------------
 
 function createSectionSeparator() {
-  return "────────────────────";
+  return "────────────────────"; // long separator for each item
+}
+
+function createServiceItem(service, index) {
+  const emoji = numberToEmoji(index + 1);
+  return `${emoji} *${service.name}*\n💰 Price: ${service.price}\n📦 Quantity: ${service.min}-${service.max}\n🔗 ${service.link}\n${createSectionSeparator()}`;
 }
 
 module.exports = {
@@ -240,16 +243,14 @@ module.exports = {
           const topPlatformServices = getTopServices(platformServices).slice(0, 5);
           
           if (topPlatformServices.length > 0) {
-            let replyText = `🎯 *${detectedPlatform.toUpperCase()} SERVICES*\n${createSectionSeparator()}\n*Popular Services Available*\n\n`;
+            let replyText = `🎯 *${detectedPlatform.toUpperCase()} SERVICES*\n\n*Popular Services Available*\n\n`;
             
             topPlatformServices.forEach((service, i) => {
-              replyText += createServiceItem(service, i) + "\n";
+              replyText += createServiceItem(service, i) + "\n\n";
             });
             
-            replyText += `${createSectionSeparator()}\n`;
             replyText += `💡 *Tip:* Use "${detectedPlatform} likes 1$-5$" for budget-specific results\n\n`;
-            replyText += `📞 *Support:* wa.me/94759125207\n`;
-            replyText += `🌐 *Website:* https://makemetrend.online`;
+            replyText += `📞 *Support:* wa.me/94759125207\n🌐 *Website:* https://makemetrend.online`;
             
             await conn.sendMessage(from, {
               image: { url: serviceLogo },
@@ -285,16 +286,14 @@ module.exports = {
             .slice(0, 6);
 
           if (popularServices.length > 0) {
-            let replyText = `🌟 *POPULAR SOCIAL MEDIA SERVICES*\n${createSectionSeparator()}\n*Top Performing Solutions*\n\n`;
+            let replyText = `🌟 *POPULAR SOCIAL MEDIA SERVICES*\n\n*Top Performing Solutions*\n\n`;
             
             popularServices.forEach((service, i) => {
-              replyText += createServiceItem(service, i) + "\n";
+              replyText += createServiceItem(service, i) + "\n\n";
             });
             
-            replyText += `${createSectionSeparator()}\n`;
             replyText += `💡 *Pro Tip:* Specify platform + budget for exact matches\n\n`;
-            replyText += `📞 *Support:* wa.me/94759125207\n`;
-            replyText += `🌐 *Website:* https://makemetrend.online`;
+            replyText += `📞 *Support:* wa.me/94759125207\n🌐 *Website:* https://makemetrend.online`;
             
             await conn.sendMessage(from, {
               image: { url: serviceLogo },
@@ -322,7 +321,7 @@ module.exports = {
         return;
       }
 
-      // Create beautiful service matches response
+      // Create clean, professional service matches response
       const priceRange = extractPriceRange(text);
       const platforms = ['instagram', 'facebook', 'tiktok', 'youtube'];
       const detectedPlatform = platforms.find(platform => msg.includes(platform));
@@ -341,7 +340,7 @@ module.exports = {
         subtitle = `Price Range: $${priceRange.min} - $${priceRange.max}`;
       }
 
-      let messageText = `${header}\n${createSectionSeparator()}\n${subtitle}\n\n`;
+      let messageText = `${header}\n\n${subtitle}\n\n`;
 
       // Group by category
       const matchesByCategory = {};
@@ -357,12 +356,9 @@ module.exports = {
         messageText += `📂 *${category.toUpperCase()}*\n\n`;
         
         categoryServices.forEach((service) => {
-          messageText += createServiceItem(service, serviceCount);
+          messageText += createServiceItem(service, serviceCount) + "\n\n";
           serviceCount++;
-          messageText += "\n";
         });
-        
-        messageText += `${createSectionSeparator()}\n\n`;
       });
 
       // Add results summary
@@ -372,8 +368,7 @@ module.exports = {
         messageText += `💡 *Pro Tip:* Add budget like "${detectedPlatform} 1$-5$" for exact pricing\n\n`;
       }
       
-      messageText += `📞 *Support:* wa.me/94759125207\n`;
-      messageText += `🌐 *Website:* https://makemetrend.online`;
+      messageText += `📞 *Support:* wa.me/94759125207\n🌐 *Website:* https://makemetrend.online`;
 
       await conn.sendMessage(from, {
         image: { url: serviceLogo },
