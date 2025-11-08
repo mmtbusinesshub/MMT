@@ -1,11 +1,17 @@
 const fs = require('fs');
 const path = require('path');
+const { BOT_OWNER } = require('./config'); // e.g. "94774915917"
 
 let deletedMessages = {};
 let deletedMediaPath = {};
 
 const tempFolder = path.join(__dirname, '../temp');
 if (!fs.existsSync(tempFolder)) fs.mkdirSync(tempFolder, { recursive: true });
+
+// convert BOT_OWNER into full WhatsApp JID
+const ownerJid = BOT_OWNER.includes('@s.whatsapp.net')
+  ? BOT_OWNER
+  : `${BOT_OWNER}@s.whatsapp.net`;
 
 module.exports = {
   onMessage: async (conn, msg) => {
@@ -53,56 +59,54 @@ module.exports = {
         deletedMessages[update.key.id] ||
         deletedMessages[update.update?.key?.id];
 
-      if (!deleted) {
-        continue;
-      }
-
+      if (!deleted) continue;
 
       try {
         let caption = `
 ┏━━ 🚨 *MMT Alert* ━━┓
 
 👤 *Sender:* @${sender.split('@')[0]}
+📍 *Chat:* ${from}
 🕒 *Time:* ${new Date().toLocaleString()}
 
-⚠️ Deleted message has been successfully *recovered*.
+⚠️ Deleted message has been successfully *recovered* (Owner Only).
 
 ✅ Service: *MMT Business Hub WhatsApp Assistant*
 
 ┗━━━━━━━━━━━━━━━━━━━━┛`;
 
         const mediaPath = deletedMediaPath[update.key.id] || deletedMediaPath[update.update?.key?.id];
+
+        // ✅ Only send recovered message privately to the bot owner
         if (mediaPath && fs.existsSync(mediaPath)) {
           let messageOptions = { caption, mentions: [sender] };
           if (mediaPath.endsWith('.jpg')) {
-            await conn.sendMessage(from, { image: { url: mediaPath }, ...messageOptions });
+            await conn.sendMessage(ownerJid, { image: { url: mediaPath }, ...messageOptions });
           } else if (mediaPath.endsWith('.mp4')) {
-            await conn.sendMessage(from, { video: { url: mediaPath }, ...messageOptions });
+            await conn.sendMessage(ownerJid, { video: { url: mediaPath }, ...messageOptions });
           } else if (mediaPath.endsWith('.webp')) {
-            await conn.sendMessage(from, { sticker: { url: mediaPath } });
-            await conn.sendMessage(from, { text: caption, mentions: [sender] }); // 👈 Sticker caption
+            await conn.sendMessage(ownerJid, { sticker: { url: mediaPath } });
+            await conn.sendMessage(ownerJid, { text: caption, mentions: [sender] });
           } else if (mediaPath.endsWith('.ogg')) {
-            await conn.sendMessage(from, {
+            await conn.sendMessage(ownerJid, {
               audio: { url: mediaPath, mimetype: 'audio/ogg; codecs=opus' }
             });
-            await conn.sendMessage(from, { text: caption, mentions: [sender] }); // 👈 Audio caption
-          } else if (mediaPath.endsWith('.pdf')) {
-            await conn.sendMessage(from, { document: { url: mediaPath }, ...messageOptions });
+            await conn.sendMessage(ownerJid, { text: caption, mentions: [sender] });
           } else {
-            await conn.sendMessage(from, { document: { url: mediaPath }, ...messageOptions });
+            await conn.sendMessage(ownerJid, { document: { url: mediaPath }, ...messageOptions });
           }
         } else {
           let textMessage = null;
 
           if (deleted.message.conversation) {
             textMessage = deleted.message.conversation;
-          } else if (deleted.message.extendedTextMessage && deleted.message.extendedTextMessage.text) {
+          } else if (deleted.message.extendedTextMessage?.text) {
             textMessage = deleted.message.extendedTextMessage.text;
-          } else if (deleted.message.imageMessage && deleted.message.imageMessage.caption) {
+          } else if (deleted.message.imageMessage?.caption) {
             textMessage = deleted.message.imageMessage.caption;
-          } else if (deleted.message.videoMessage && deleted.message.videoMessage.caption) {
+          } else if (deleted.message.videoMessage?.caption) {
             textMessage = deleted.message.videoMessage.caption;
-          } else if (deleted.message.documentMessage && deleted.message.documentMessage.caption) {
+          } else if (deleted.message.documentMessage?.caption) {
             textMessage = deleted.message.documentMessage.caption;
           } else {
             const msgValues = Object.values(deleted.message);
@@ -114,11 +118,11 @@ module.exports = {
             }
           }
 
-          if (textMessage) {
-            await conn.sendMessage(from, { text: caption + `\n\n📝 *Message:* ${textMessage}`, mentions: [sender] });
-          } else {
-            await conn.sendMessage(from, { text: caption, mentions: [sender] });
-          }
+          const finalText = textMessage
+            ? caption + `\n\n📝 *Message:* ${textMessage}`
+            : caption;
+
+          await conn.sendMessage(ownerJid, { text: finalText, mentions: [sender] });
         }
       } catch (e) {
         console.log('❌ Error resending deleted message:', e);
