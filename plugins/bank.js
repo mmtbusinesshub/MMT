@@ -140,7 +140,7 @@ async function handleBankReply(conn, mek, text, from, sender) {
     }
 
     if (selectedBank) {
-      const bankMessage = `🏦 *PAYMENT DETAILS*\n────────────────────\n${selectedBank.emoji} *${selectedBank.name}*\n────────────────────\n${selectedBank.details}\n────────────────────\n📞 *Support:* wa.me/94759125207`;
+      const bankMessage = `🏦 *PAYMENT DETAILS*\n────────────────────\n${selectedBank.emoji} *${selectedBank.name}*\n────────────────────\n${selectedBank.details}\n────────────────────\n📞 *Support:* wa.me/94722136082`;
 
       await conn.sendMessage(from, {
         image: { url: serviceLogo },
