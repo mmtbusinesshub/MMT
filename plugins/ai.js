@@ -1,5 +1,31 @@
 const axios = require("axios");
 
+let usdToLkr = 300; // fallback default rate
+
+async function updateExchangeRate() {
+  try {
+    const { data } = await axios.get("https://api.exchangerate.host/latest?base=USD&symbols=LKR");
+    if (data && data.rates && data.rates.LKR) {
+      usdToLkr = data.rates.LKR;
+      console.log(`💱 [MMT BUSINESS HUB] Updated USD→LKR rate: ${usdToLkr}`);
+    }
+  } catch (err) {
+    console.error("⚠️ [MMT BUSINESS HUB] Failed to fetch exchange rate:", err.message);
+  }
+}
+
+// Update every 12 hours automatically
+updateExchangeRate();
+setInterval(updateExchangeRate, 12 * 60 * 60 * 1000);
+
+// 💰 Convert USD text (like "$2") to LKR formatted value
+function convertToLKR(priceStr) {
+  const match = priceStr.match(/(\d+\.?\d*)/);
+  const usdValue = match ? parseFloat(match[1]) : 0;
+  const lkrValue = Math.round(usdValue * usdToLkr);
+  return `Rs. ${lkrValue.toLocaleString("en-LK")}`;
+}
+
 const channelJid = '120363423526129509@newsletter'; 
 const channelName = 'ミ★ 𝙈𝙈𝙏 𝘽𝙐𝙎𝙄𝙉𝙀𝙎𝙎 𝙃𝙐𝘽 ★彡'; 
 const serviceLogo = "https://github.com/mmtbusinesshub/MMT/blob/main/images/download.png?raw=true";
@@ -159,7 +185,7 @@ function createSectionSeparator() {
 
 function createServiceItem(service, index) {
   const emoji = numberToEmoji(index + 1);
-  return `${emoji} *${service.name}*\n💰 Price: ${service.price}\n📦 Quantity: ${service.min}-${service.max}\n🔗 ${service.link}\n${createSectionSeparator()}`;
+  return `${emoji} *${service.name}*\n💰 Price: ${convertToLKR(service.price)} (${service.price})\n📦 Quantity: ${service.min}-${service.max}\n🔗 ${service.link}\n${createSectionSeparator()}`;
 }
 
 module.exports = {
@@ -225,7 +251,7 @@ module.exports = {
         await conn.sendMessage(
           from,
           { 
-            text: "🔸 *System Maintenance*\n\nWe're currently upgrading our service database for better performance.\n\n📞 Immediate assistance: wa.me/94759125207" 
+            text: "🔸 *System Maintenance*\n\nWe're currently upgrading our service database for better performance.\n\n📞 Immediate assistance: wa.me/94722136082" 
           },
           { quoted: mek }
         );
@@ -250,7 +276,7 @@ module.exports = {
             });
             
             replyText += `💡 *Tip:* Use "${detectedPlatform} likes 1$-5$" for budget-specific results\n\n`;
-            replyText += `📞 *Support:* wa.me/94759125207\n🌐 *Website:* https://makemetrend.online`;
+            replyText += `📞 *Support:* wa.me/94722136082\n🌐 *Website:* https://makemetrend.online`;
             
             await conn.sendMessage(from, {
               image: { url: serviceLogo },
@@ -269,7 +295,7 @@ module.exports = {
             await conn.sendMessage(
               from,
               { 
-                text: `🔸 *Service Catalog*\n\nCurrently no ${detectedPlatform} services available.\n\n📍 Browse all services: https://makemetrend.online/services\n\n💬 Custom solutions: wa.me/94759125207` 
+                text: `🔸 *Service Catalog*\n\nCurrently no ${detectedPlatform} services available.\n\n📍 Browse all services: https://makemetrend.online/services\n\n💬 Custom solutions: wa.me/94722136082` 
               },
               { quoted: mek }
             );
@@ -293,7 +319,7 @@ module.exports = {
             });
             
             replyText += `💡 *Pro Tip:* Specify platform + budget for exact matches\n\n`;
-            replyText += `📞 *Support:* wa.me/94759125207\n🌐 *Website:* https://makemetrend.online`;
+            replyText += `📞 *Support:* wa.me/94722136082\n🌐 *Website:* https://makemetrend.online`;
             
             await conn.sendMessage(from, {
               image: { url: serviceLogo },
@@ -368,7 +394,7 @@ module.exports = {
         messageText += `💡 *Pro Tip:* Add budget like "${detectedPlatform} 1$-5$" for exact pricing\n\n`;
       }
       
-      messageText += `📞 *Support:* wa.me/94759125207\n🌐 *Website:* https://makemetrend.online`;
+      messageText += `📞 *Support:* wa.me/94722136082\n🌐 *Website:* https://makemetrend.online`;
 
       await conn.sendMessage(from, {
         image: { url: serviceLogo },
@@ -393,7 +419,7 @@ module.exports = {
         await conn.sendMessage(
           from,
           { 
-            text: "🔸 *Temporary Issue*\n\nWe're experiencing a technical difficulty. Our team has been notified.\n\n📞 Contact support: wa.me/94759125207\n📍 Website: https://makemetrend.online" 
+            text: "🔸 *Temporary Issue*\n\nWe're experiencing a technical difficulty. Our team has been notified.\n\n📞 Contact support: wa.me/94722136082\n📍 Website: https://makemetrend.online" 
           },
           { quoted: mek }
         );
