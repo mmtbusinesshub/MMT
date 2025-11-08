@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { BOT_OWNER } = require('./config'); // e.g. "94774915917"
+const { BOT_OWNER } = require('../config'); // e.g. "94774915917"
 
 let deletedMessages = {};
 let deletedMediaPath = {};
