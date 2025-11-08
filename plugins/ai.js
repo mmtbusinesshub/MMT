@@ -333,8 +333,8 @@ module.exports = {
         header = `🎯 *${detectedPlatform.toUpperCase()} SERVICES*`;
         subtitle = `Budget Range: $${priceRange.min} - $${priceRange.max}`;
       } else if (detectedPlatform) {
-        header = `🚀 *BEST ${detectedPlatform.toUpperCase()} SERVICES*`;
-        subtitle = "Top Value & Premium Options";
+        header = `━━━━━━━━━━━━━━━━━━━━\n🚀 *BEST ${detectedPlatform.toUpperCase()} SERVICES*\n━━━━━━━━━━━━━━━━━━━━`;
+        subtitle = "*Top Value & Premium Options*";
       } else if (priceRange) {
         header = `💰 *BUDGET SERVICES*`;
         subtitle = `Price Range: $${priceRange.min} - $${priceRange.max}`;
