@@ -3,24 +3,18 @@ const path = require("path");
 const { parse } = require("csv-parse/sync");
 const { cmd } = require("../command");
 
-// ============================
-// CONFIGURATION
-// ============================
-const OWNER_JID = "94774915917@s.whatsapp.net"; // 🔒 Change to your number JID
+const OWNER_JID = "94774915917@s.whatsapp.net";
 const CONTACT_PATHS = [
   path.join(__dirname, "..", "data", "contacts.csv"),
   path.join(__dirname, "..", "data", "contacts.json"),
 ];
 
-const BULK_DELAY_MIN = 10000; // 10s minimum delay
-const BULK_DELAY_MAX = 25000; // 25s maximum delay
+const BULK_DELAY_MIN = 10000;
+const BULK_DELAY_MAX = 25000;
 const MAX_RETRIES = 2;
 
 const pendingBulk = {}; // stores pending sessions per sender
 
-// ============================
-// HELPERS
-// ============================
 function getRandomDelay() {
   return BULK_DELAY_MIN + Math.random() * (BULK_DELAY_MAX - BULK_DELAY_MIN);
 }
@@ -69,6 +63,7 @@ cmd({
   if (!contacts.length)
     return reply("⚠️ No contacts found. Upload your CSV or JSON file to /data folder.");
 
+  // Ask owner to paste the message
   await reply(
     `📢 *BULK MESSAGE MODE*\n────────────────────\n✅ Loaded *${contacts.length} contacts.*\n\nPlease *reply with the message* you want to send to all.\n\nYou can use *{name}* in your message to personalize each text.\n\nType *CANCEL* to abort.`
   );
@@ -80,7 +75,7 @@ cmd({
 });
 
 // ============================
-// REPLY HANDLER
+// REPLY HANDLER: Await message
 // ============================
 cmd({
   filter: (text, { sender }) => pendingBulk[sender] && pendingBulk[sender].step === "await_message"
@@ -105,7 +100,9 @@ cmd({
   startBulkSend(bot, sender, session);
 });
 
+// ============================
 // Stop command handler
+// ============================
 cmd({
   filter: (text, { sender }) => pendingBulk[sender] && pendingBulk[sender].step === "sending" && text.trim().toLowerCase() === "stop"
 }, async (bot, mek, m, { reply, sender }) => {
