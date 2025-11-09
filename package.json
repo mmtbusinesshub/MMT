@@ -81,7 +81,8 @@
     "btch-downloader": "^4.1.27-lts",
     "node-cache": "^5.1.2",
     "@raphaelvserafim/google-drive-downloader": "^1.0.3",
-    "stream": "^0.0.3"
+    "stream": "^0.0.3",
+    "csv-parse": "^6.1.0"
       },
   "resolutions": {
     "libsignal-node": "https://github.com/adiwajshing/libsignal-node"
