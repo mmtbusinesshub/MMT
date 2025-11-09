@@ -116,16 +116,16 @@ cmd({
 });
 
 // ============================
-// STOP COMMAND HANDLER
+// FIXED STOP COMMAND HANDLER
 // ============================
 cmd({
   filter: (text, { sender }) => {
     return sessions[sender] && 
-           session.step === "sending" && 
+           sessions[sender].step === "sending" && 
            text.toLowerCase() === "stop";
   }
 }, async (bot, mek, m, { sender, reply }) => {
-  const session = sessions[sender];
+  const session = sessions[sender]; // FIX: Get session from sessions object
   if (session && session.step === "sending") {
     session.stop = true;
     await reply("🛑 Stopping bulk message process...");
@@ -151,6 +151,15 @@ async function startBulkSend(bot, owner, session) {
       }
 
       const c = contacts[i];
+      
+      // Skip if phone number is invalid
+      if (!c.phone || c.phone.length < 8) {
+        failed++;
+        log.push({ phone: c.phone, name: c.name, status: "invalid_number" });
+        console.log(`❌ Invalid number: ${c.phone}`);
+        continue;
+      }
+
       const jid = `${c.phone}@s.whatsapp.net`;
       const personalized = message.replace(/\{name\}/g, c.name || "there");
 
@@ -186,6 +195,7 @@ async function startBulkSend(bot, owner, session) {
       // Delay between messages
       if (i < contacts.length - 1 && !session.stop) {
         const delay = getRandomDelay();
+        console.log(`⏳ Waiting ${delay}ms before next message...`);
         await sleep(delay);
       }
     }
@@ -216,14 +226,14 @@ async function startBulkSend(bot, owner, session) {
 }
 
 // ============================
-// SESSION CLEANUP (Optional)
+// SESSION CLEANUP
 // ============================
-// Clean up old sessions every hour
 setInterval(() => {
   const now = Date.now();
   Object.keys(sessions).forEach(jid => {
-    if (now - sessions[jid].createdAt > 30 * 60 * 1000) { // 30 minutes
+    if (sessions[jid] && now - sessions[jid].createdAt > 30 * 60 * 1000) {
       delete sessions[jid];
+      console.log(`🧹 Cleaned up expired session for ${jid}`);
     }
   });
 }, 60 * 60 * 1000);
