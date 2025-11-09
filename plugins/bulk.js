@@ -76,53 +76,54 @@ cmd({
 });
 
 // ============================
-// MESSAGE HANDLER: Capture the message reply
+// REPLY HANDLER: Capture the message from owner
 // ============================
 cmd({
-  on: "message"
+  filter: (text, { sender }) => 
+    pendingBulk[sender] && 
+    pendingBulk[sender].step === "await_message" && 
+    sender === OWNER_JID
 }, async (bot, mek, m, { reply, sender, body }) => {
-  // Check if user has a pending bulk session waiting for message
-  if (pendingBulk[sender] && pendingBulk[sender].step === "await_message") {
-    const msg = body.trim();
-    
-    // Handle cancel command
-    if (msg.toLowerCase() === "cancel") {
-      delete pendingBulk[sender];
-      return reply("❌ Bulk message cancelled.");
-    }
-
-    // Prevent empty messages
-    if (!msg) {
-      return reply("⚠️ Please send a valid message or type CANCEL to abort.");
-    }
-
-    const session = pendingBulk[sender];
-    
-    // Update session with message and start sending
-    session.messageText = msg;
-    session.step = "sending";
-    session.stop = false;
-
-    await reply(
-      `🚀 Sending your message to *${session.contacts.length}* contacts...\n\nType *STOP* anytime to halt sending.`
-    );
-
-    // Start the bulk sending process
-    startBulkSend(bot, sender, session);
+  const msg = body.trim();
+  
+  // Handle cancel command
+  if (msg.toLowerCase() === "cancel") {
+    delete pendingBulk[sender];
+    return reply("❌ Bulk message cancelled.");
   }
+
+  // Prevent empty messages
+  if (!msg) {
+    return reply("⚠️ Please send a valid message or type CANCEL to abort.");
+  }
+
+  const session = pendingBulk[sender];
+  
+  // Update session with message and start sending
+  session.messageText = msg;
+  session.step = "sending";
+  session.stop = false;
+
+  await reply(
+    `🚀 Sending your message to *${session.contacts.length}* contacts...\n\nType *STOP* anytime to halt sending.`
+  );
+
+  // Start the bulk sending process
+  startBulkSend(bot, sender, session);
 });
 
 // ============================
-// Stop command handler
+// STOP COMMAND: Stop ongoing bulk send
 // ============================
 cmd({
-  pattern: "stop",
-  desc: "Stop ongoing bulk message sending"
+  filter: (text, { sender }) => 
+    pendingBulk[sender] && 
+    pendingBulk[sender].step === "sending" && 
+    text.trim().toLowerCase() === "stop" &&
+    sender === OWNER_JID
 }, async (bot, mek, m, { reply, sender }) => {
-  if (pendingBulk[sender] && pendingBulk[sender].step === "sending") {
-    pendingBulk[sender].stop = true;
-    await reply("🛑 Stopping bulk message process...");
-  }
+  pendingBulk[sender].stop = true;
+  await reply("🛑 Stopping bulk message process...");
 });
 
 // ============================
@@ -135,64 +136,78 @@ async function startBulkSend(bot, owner, session) {
   let sent = 0;
   let failed = 0;
 
-  for (const c of contacts) {
-    // Check if stop command was issued
-    if (session.stop) {
-      await bot.sendMessage(owner, { 
-        text: `⏹️ Process stopped by user.\n\n📬 Sent: ${sent}\n❌ Failed: ${failed}\n📋 Remaining: ${contacts.length - (sent + failed)}`
-      });
-      break;
-    }
+  try {
+    for (let i = 0; i < contacts.length; i++) {
+      const c = contacts[i];
+      
+      // Check if stop command was issued
+      if (session.stop) {
+        await bot.sendMessage(owner, { 
+          text: `⏹️ Process stopped by user.\n\n📬 Sent: ${sent}\n❌ Failed: ${failed}\n📋 Remaining: ${contacts.length - (sent + failed)}`
+        });
+        break;
+      }
 
-    const jid = `${c.phone}@s.whatsapp.net`;
-    const text = message.replace(/\{name\}/g, c.name || "there");
+      const jid = `${c.phone}@s.whatsapp.net`;
+      const text = message.replace(/\{name\}/g, c.name || "there");
 
-    let success = false;
-    let attempts = 0;
+      let success = false;
+      let attempts = 0;
 
-    // Retry logic
-    while (!success && attempts <= MAX_RETRIES) {
-      attempts++;
-      try {
-        await bot.sendMessage(jid, { text });
-        success = true;
-        sent++;
-        log.push({ phone: c.phone, name: c.name, status: "sent" });
-      } catch (err) {
-        if (attempts > MAX_RETRIES) {
-          failed++;
-          log.push({ phone: c.phone, name: c.name, status: "failed", error: err.message });
-        } else {
-          await sleep(2000); // Wait 2 seconds before retry
+      // Retry logic
+      while (!success && attempts <= MAX_RETRIES) {
+        attempts++;
+        try {
+          await bot.sendMessage(jid, { text });
+          success = true;
+          sent++;
+          log.push({ phone: c.phone, name: c.name, status: "sent" });
+        } catch (err) {
+          console.error(`Failed to send to ${c.phone}:`, err.message);
+          if (attempts > MAX_RETRIES) {
+            failed++;
+            log.push({ phone: c.phone, name: c.name, status: "failed", error: err.message });
+          } else {
+            await sleep(2000); // Wait 2 seconds before retry
+          }
         }
+      }
+
+      // Random delay between messages (except for the last one)
+      if (i < contacts.length - 1) {
+        await sleep(getRandomDelay());
+      }
+
+      // Progress update every 10 messages
+      if ((sent + failed) % 10 === 0 || (sent + failed) === contacts.length) {
+        const progress = Math.round(((sent + failed) / contacts.length) * 100);
+        await bot.sendMessage(owner, { 
+          text: `📤 Progress: ${sent} sent, ${failed} failed. (${progress}%)` 
+        });
       }
     }
 
-    // Random delay between messages
-    await sleep(getRandomDelay());
+    // Final report
+    const result = `✅ *Bulk message process complete!*\n\n📬 Sent: ${sent}\n❌ Failed: ${failed}\n📋 Total: ${contacts.length}`;
+    await bot.sendMessage(owner, { text: result });
 
-    // Progress update every 10 messages
-    if ((sent + failed) % 10 === 0) {
-      await bot.sendMessage(owner, { 
-        text: `📤 Progress: ${sent} sent, ${failed} failed. (${Math.round(((sent + failed) / contacts.length) * 100)}%)` 
-      });
-    }
+    // Save and send log
+    const logPath = path.join(__dirname, "..", "data", `bulk_log_${Date.now()}.json`);
+    fs.writeFileSync(logPath, JSON.stringify(log, null, 2));
+
+    await bot.sendMessage(owner, {
+      document: fs.readFileSync(logPath),
+      fileName: `bulk_log_${Date.now()}.json`,
+      mimetype: "application/json",
+    });
+
+  } catch (error) {
+    console.error("Bulk send error:", error);
+    await bot.sendMessage(owner, { 
+      text: `❌ Bulk message process failed: ${error.message}` 
+    });
+  } finally {
+    // Clean up session
+    delete pendingBulk[owner];
   }
-
-  // Final report
-  const result = `✅ *Bulk message process complete!*\n\n📬 Sent: ${sent}\n❌ Failed: ${failed}\n📋 Total: ${contacts.length}`;
-  await bot.sendMessage(owner, { text: result });
-
-  // Save and send log
-  const logPath = path.join(__dirname, "..", "data", `bulk_log_${Date.now()}.json`);
-  fs.writeFileSync(logPath, JSON.stringify(log, null, 2));
-
-  await bot.sendMessage(owner, {
-    document: fs.readFileSync(logPath),
-    fileName: path.basename(logPath),
-    mimetype: "application/json",
-  });
-
-  // Clean up session
-  delete pendingBulk[owner];
 }
