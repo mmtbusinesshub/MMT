@@ -1,95 +1,57 @@
-const { cmd } = require("../command");
 const fs = require("fs");
 const path = require("path");
-const parse = require("csv-parse/sync").parse;
+const Papa = require("papaparse"); // if your bot already uses this, else use simple split
 const config = require("../config");
+const { cmd } = require("../command");
+const { sleep } = require("../lib/functions");
 
-// Pending state for reply-based interaction
-const pendingBroadcast = {};
-
-// Load contacts from CSV file in `data/contacts.csv`
-function loadContacts() {
-  const csvPath = path.join(__dirname, "..", "data", "contacts.csv");
-  if (!fs.existsSync(csvPath)) return [];
-  const data = fs.readFileSync(csvPath, "utf-8");
-  const records = parse(data, {
-    columns: true,
-    skip_empty_lines: true
-  });
-  return records.map(r => ({
-    name: r.Name || r.name || "Unknown",
-    number: r.Phone || r.phone
-  }));
-}
-
-// Step 1: Owner sends .bulk command
 cmd({
   pattern: "bulk",
   react: "📢",
-  desc: "Broadcast a message to all contacts (Owner only)",
+  desc: "Broadcast a message to all saved contacts (Owner Only)",
   category: "owner",
   filename: __filename
-}, async (bot, mek, m, { from, sender, reply }) => {
+}, async (conn, mek, m, { reply, sender, args }) => {
   try {
     const ownerJid = config.BOT_OWNER + "@s.whatsapp.net";
-    if (sender !== ownerJid) return reply("❌ This command is only for the bot owner.");
 
-    // Ask owner for the broadcast message
-    pendingBroadcast[sender] = { step: 1 };
-    await reply("📩 Please send the message you want to broadcast to all contacts.");
-  } catch (e) {
-    console.error("Bulk command error:", e);
-    reply("❌ Something went wrong while starting the broadcast.");
-  }
-});
-
-// Step 2: Owner replies with the message to broadcast
-cmd({
-  filter: (text, { sender }) => pendingBroadcast[sender] && pendingBroadcast[sender].step === 1
-}, async (bot, mek, m, { from, body, sender, reply }) => {
-  try {
-    const ownerJid = config.BOT_OWNER + "@s.whatsapp.net";
-    if (sender !== ownerJid) return;
-
-    const message = body.trim();
-    if (!message) return reply("❌ Cannot send empty message.");
-
-    // Store message and move to next step
-    pendingBroadcast[sender] = { step: 2, message };
-    await reply(`✅ Got it! The message is ready to send:\n\n"${message}"\n\nSend any message again to start broadcasting to all contacts.`);
-  } catch (e) {
-    console.error("Broadcast reply error:", e);
-    reply("❌ Failed to store broadcast message.");
-  }
-});
-
-// Step 3: Owner sends any message again to start broadcasting
-cmd({
-  filter: (text, { sender }) => pendingBroadcast[sender] && pendingBroadcast[sender].step === 2
-}, async (bot, mek, m, { from, sender, reply }) => {
-  try {
-    const ownerJid = config.BOT_OWNER + "@s.whatsapp.net";
-    if (sender !== ownerJid) return;
-
-    const { message } = pendingBroadcast[sender];
-    const contacts = loadContacts();
-    if (!contacts.length) return reply("❌ No contacts found in data/contacts.csv");
-
-    await reply(`📤 Broadcasting message to ${contacts.length} contacts...`);
-
-    for (const contact of contacts) {
-      const jid = contact.number + "@s.whatsapp.net";
-      try {
-        await bot.sendMessage(jid, { text: message });
-      } catch (err) {
-        console.error(`Failed to send message to ${contact.number}:`, err.message);
-      }
+    // Only allow the bot owner
+    if (sender !== ownerJid) {
+      return reply("❌ This command is only for the bot owner.");
     }
 
-    await reply(`✅ Broadcast completed to ${contacts.length} contacts.`);
-    delete pendingBroadcast[sender];
-  } catch (e) {
-    console.error("Broadcast error:", e);
-    reply("❌ Failed to broadcast the message.");
+    // Get the broadcast message text
+    const message = args.join(" ").trim();
+    if (!message) return reply("⚠️ Please provide a message.\nExample: *.bulk Hello everyone!*");
+
+    // Read contacts.csv from data folder
+    const csvPath = path.join(__dirname, "../data/contacts.csv");
+    if (!fs.existsSync(csvPath)) {
+      return reply("❌ contacts.csv file not found in /data folder.");
+    }
+
+    const csvData = fs.readFileSync(csvPath, "utf8");
+    const rows = csvData.split("\n").slice(1); // skip header line
+    const contacts = rows
+      .map(line => line.trim().split("\t")[1]) // assuming tab-separated
+      .filter(num => num && num.match(/^\d+$/));
+
+    if (contacts.length === 0) return reply("⚠️ No valid contacts found in contacts.csv.");
+
+    await reply(`📢 Starting broadcast to *${contacts.length}* contacts...`);
+
+    // Loop through contacts and send messages
+    for (let i = 0; i < contacts.length; i++) {
+      const jid = contacts[i] + "@s.whatsapp.net";
+      await conn.sendMessage(jid, { text: message });
+      console.log(`✅ Sent to ${contacts[i]}`);
+      await sleep(1200); // wait 1.2s between messages to avoid spam flag
+    }
+
+    await reply("✅ Broadcast complete!");
+
+  } catch (err) {
+    console.error("Bulk broadcast error:", err);
+    reply("❌ Error during broadcast:\n" + err);
   }
 });
