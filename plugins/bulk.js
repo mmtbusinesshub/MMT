@@ -13,7 +13,7 @@ const BULK_DELAY_MIN = 10000;
 const BULK_DELAY_MAX = 25000;
 const MAX_RETRIES = 2;
 
-const pendingBulk = {}; // tracks bulk send sessions
+const sessions = {}; // tracks pending sessions
 
 function getRandomDelay() {
   return BULK_DELAY_MIN + Math.random() * (BULK_DELAY_MAX - BULK_DELAY_MIN);
@@ -28,7 +28,6 @@ function loadContacts() {
     if (fs.existsSync(file)) {
       const ext = path.extname(file).toLowerCase();
       const data = fs.readFileSync(file, "utf-8");
-
       if (ext === ".json") {
         const arr = JSON.parse(data);
         return arr.map((x) => ({
@@ -63,100 +62,92 @@ cmd({
   if (!contacts.length)
     return reply("⚠️ No contacts found. Upload your CSV or JSON file to /data folder.");
 
-  // Ask owner for message content
+  // Ask owner for message text
   await bot.sendMessage(sender, {
     text: `📢 *BULK MESSAGE MODE*\n────────────────────\n✅ Loaded *${contacts.length} contacts.*\n\nPlease *type your message* that you want to send to all contacts.\n\nYou can use *{name}* in your message to personalize each text.\n\nType *CANCEL* to abort.`
   });
 
-  // Create pending session
-  pendingBulk[sender] = {
-    step: "await_message",
-    contacts,
+  // store pending session
+  sessions[sender] = {
+    step: "awaiting_message",
+    contacts
   };
 });
 
 // ============================
-// REPLY HANDLER: Capture message from owner
+// OWNER REPLY HANDLER
 // ============================
 cmd({
-  filter: (text, { sender }) =>
-    pendingBulk[sender] &&
-    pendingBulk[sender].step === "await_message" &&
-    sender === OWNER_JID
-}, async (bot, mek, m, { reply, sender, body }) => {
-  const msg = body.trim();
+  on: "text",
+}, async (bot, mek, m, { sender, body, reply }) => {
+  if (sender !== OWNER_JID) return; // only owner can trigger
 
-  // Cancel
+  const session = sessions[sender];
+  if (!session) return; // no pending session
+
+  const msg = body?.trim();
+  if (!msg) return;
+
+  // Handle cancel
   if (msg.toLowerCase() === "cancel") {
-    delete pendingBulk[sender];
+    delete sessions[sender];
     return reply("❌ Bulk message cancelled.");
   }
 
-  if (!msg) return reply("⚠️ Please send a valid message or type CANCEL to abort.");
+  // Handle stop
+  if (msg.toLowerCase() === "stop" && session.step === "sending") {
+    session.stop = true;
+    return reply("🛑 Stopping bulk message process...");
+  }
 
-  const session = pendingBulk[sender];
-  session.messageText = msg;
-  session.step = "sending";
-  session.stop = false;
+  // Handle message input step
+  if (session.step === "awaiting_message") {
+    session.message = msg;
+    session.step = "sending";
+    session.stop = false;
 
-  await reply(`🚀 Starting to send your message to *${session.contacts.length}* contacts...\n\nType *STOP* anytime to halt sending.`);
+    await reply(`🚀 Starting to send your message to *${session.contacts.length}* contacts...\n\nType *STOP* anytime to halt sending.`);
 
-  // Start sending after message received
-  startBulkSend(bot, sender, session);
+    // Start sending
+    startBulkSend(bot, sender, session);
+  }
 });
 
 // ============================
-// STOP COMMAND: Stop ongoing bulk send
-// ============================
-cmd({
-  filter: (text, { sender }) =>
-    pendingBulk[sender] &&
-    pendingBulk[sender].step === "sending" &&
-    text.trim().toLowerCase() === "stop" &&
-    sender === OWNER_JID
-}, async (bot, mek, m, { reply, sender }) => {
-  pendingBulk[sender].stop = true;
-  await reply("🛑 Stopping bulk message process...");
-});
-
-// ============================
-// BULK SEND FUNCTION
+// BULK SEND LOGIC
 // ============================
 async function startBulkSend(bot, owner, session) {
-  const contacts = session.contacts;
-  const message = session.messageText;
+  const { contacts, message } = session;
   const log = [];
   let sent = 0;
   let failed = 0;
 
   try {
     for (let i = 0; i < contacts.length; i++) {
-      const c = contacts[i];
-
       if (session.stop) {
-        await bot.sendMessage(owner, {
-          text: `⏹️ Process stopped by user.\n\n📬 Sent: ${sent}\n❌ Failed: ${failed}\n📋 Remaining: ${contacts.length - (sent + failed)}`
+        await bot.sendMessage(owner, { 
+          text: `⏹️ Process stopped.\n\n📬 Sent: ${sent}\n❌ Failed: ${failed}\n📋 Remaining: ${contacts.length - (sent + failed)}`
         });
         break;
       }
 
+      const c = contacts[i];
       const jid = `${c.phone}@s.whatsapp.net`;
-      const personalizedMessage = message.replace(/\{name\}/g, c.name || "there");
+      const personalized = message.replace(/\{name\}/g, c.name || "there");
 
       let success = false;
-      let attempts = 0;
+      let tries = 0;
 
-      while (!success && attempts <= MAX_RETRIES) {
-        attempts++;
+      while (!success && tries <= MAX_RETRIES) {
+        tries++;
         try {
-          await bot.sendMessage(jid, { text: personalizedMessage });
+          await bot.sendMessage(jid, { text: personalized });
           success = true;
           sent++;
           log.push({ phone: c.phone, name: c.name, status: "sent" });
           console.log(`✅ Sent to ${c.phone}`);
         } catch (err) {
-          console.error(`❌ Failed to send to ${c.phone}:`, err.message);
-          if (attempts > MAX_RETRIES) {
+          if (tries > MAX_RETRIES) {
             failed++;
             log.push({ phone: c.phone, name: c.name, status: "failed", error: err.message });
           } else {
@@ -166,38 +157,36 @@ async function startBulkSend(bot, owner, session) {
       }
 
       if (i < contacts.length - 1 && !session.stop) {
-        const delay = getRandomDelay();
-        await sleep(delay);
+        await sleep(getRandomDelay());
       }
 
-      if (((sent + failed) % 10 === 0 || (sent + failed) === contacts.length) && !session.stop) {
-        const progress = Math.round(((sent + failed) / contacts.length) * 100);
-        await bot.sendMessage(owner, {
-          text: `📤 Progress: ${sent} sent, ${failed} failed. (${progress}%)`
+      if ((sent + failed) % 10 === 0 || (sent + failed) === contacts.length) {
+        await bot.sendMessage(owner, { 
+          text: `📤 Progress: ${sent} sent, ${failed} failed. (${Math.round(((sent + failed) / contacts.length) * 100)}%)`
         });
       }
     }
 
-    const result = session.stop
-      ? `⏹️ *Bulk message process stopped!*\n\n📬 Sent: ${sent}\n❌ Failed: ${failed}\n📋 Remaining: ${contacts.length - (sent + failed)}`
-      : `✅ *Bulk message process complete!*\n\n📬 Sent: ${sent}\n❌ Failed: ${failed}\n📋 Total: ${contacts.length}`;
+    const summary = session.stop
+      ? `⏹️ *Process stopped!*\n📬 Sent: ${sent}\n❌ Failed: ${failed}\n📋 Remaining: ${contacts.length - (sent + failed)}`
+      : `✅ *Bulk message complete!*\n📬 Sent: ${sent}\n❌ Failed: ${failed}\n📋 Total: ${contacts.length}`;
 
-    await bot.sendMessage(owner, { text: result });
+    await bot.sendMessage(owner, { text: summary });
 
+    // Save log file
     if (sent > 0 || failed > 0) {
       const logPath = path.join(__dirname, "..", "data", `bulk_log_${Date.now()}.json`);
       fs.writeFileSync(logPath, JSON.stringify(log, null, 2));
-
       await bot.sendMessage(owner, {
         document: fs.readFileSync(logPath),
-        fileName: `bulk_log_${Date.now()}.json`,
+        fileName: path.basename(logPath),
         mimetype: "application/json",
       });
     }
-  } catch (error) {
-    console.error("Bulk send error:", error);
-    await bot.sendMessage(owner, { text: `❌ Bulk message process failed: ${error.message}` });
+  } catch (err) {
+    console.error("Bulk send error:", err);
+    await bot.sendMessage(owner, { text: `❌ Bulk send failed: ${err.message}` });
   } finally {
-    delete pendingBulk[owner];
+    delete sessions[owner];
   }
 }
