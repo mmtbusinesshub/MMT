@@ -18,17 +18,15 @@ cmd({
   if (!sender.includes(OWNER_NUMBER))
     return reply("❌ You are not authorized to use this command.");
 
-  // Start session, but mark waiting
   bulkSessions[sender] = { stage: "waitingForMessage", lastCommandTime: Date.now() };
-
   await reply("📝 *Please type the message you want to send to your contact list.*\n\n✍️ I'll wait for your next message.");
 });
 
 
 // 🧠 STEP 2 – Capture next message only
 cmd({
-  filter: (text, { sender }) =>
-    bulkSessions[sender]?.stage === "waitingForMessage"
+  filter: (text, { sender, fromMe }) =>
+    bulkSessions[sender]?.stage === "waitingForMessage" && !fromMe // ⛔ ignore bot’s own replies
 }, async (bot, mek, m, { sender, body, reply }) => {
 
   const messageToSend = body.trim();
