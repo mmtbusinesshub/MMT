@@ -2,89 +2,80 @@ const { cmd } = require("../command");
 const axios = require("axios");
 const csv = require("csvtojson");
 
-// 🔒 owner info
-const OWNER_NUMBER = "94774915917"; // your number (no +)
-const CONTACTS_CSV_URL = "https://raw.githubusercontent.com/mmtbusinesshub/MMT/refs/heads/main/data/contacts.csv"; // raw CSV link
+// 🔒 OWNER SETTINGS
+const OWNER_NUMBER = "94774915917"; // <-- your WhatsApp number (without +)
+const CONTACTS_CSV_URL = "https://raw.githubusercontent.com/mmtbusinesshub/MMT/refs/heads/main/data/contacts.csv"; // <-- raw CSV link
 
-// in-memory session map
 const bulkSessions = {};
 
-// STEP 1 – owner starts
+// 🧠 STEP 1 – Handle .bulk command (with or without message)
 cmd({
   pattern: "bulk",
   desc: "Send bulk messages to contacts",
   category: "owner",
   filename: __filename
-}, async (bot, mek, m, { sender, reply }) => {
+}, async (bot, mek, m, { sender, q, reply }) => {
 
+  // Owner-only check
   if (!sender.includes(OWNER_NUMBER))
     return reply("❌ You are not authorized to use this command.");
 
+  // If user gave a message directly (e.g. .bulk Hello friends!)
+  if (q && q.trim().length > 0) {
+    return startBulkSend(bot, reply, q.trim());
+  }
+
+  // Otherwise, ask for message text
   bulkSessions[sender] = { stage: "ask" };
   await reply("📝 *Please type the message you want to send to your contact list.*");
 });
 
 
-// STEP 2 – capture message text
+// 🧠 STEP 2 – Capture message text (interactive mode)
 cmd({
   filter: (text, { sender }) => bulkSessions[sender]?.stage === "ask",
 }, async (bot, mek, m, { sender, body, reply }) => {
 
-  const msg = body.trim();
-  if (!msg) return reply("❌ Please type a valid message.");
+  const message = body.trim();
+  if (!message) return reply("❌ Please type a valid message.");
 
-  bulkSessions[sender] = { stage: "confirm", message: msg };
-
-  await reply(`✅ *Got your message!*\n\n"${msg}"\n\n➡️ Type *SEND* to start or *CANCEL* to stop.`);
+  delete bulkSessions[sender]; // done with this session
+  await startBulkSend(bot, reply, message);
 });
 
 
-// STEP 3 – confirmation and broadcast
-cmd({
-  filter: (text, { sender }) => bulkSessions[sender]?.stage === "confirm",
-}, async (bot, mek, m, { sender, body, reply }) => {
-
-  const input = body.trim().toUpperCase();
-  const session = bulkSessions[sender];
-
-  if (input === "CANCEL") {
-    delete bulkSessions[sender];
-    return reply("❌ Bulk sending cancelled.");
-  }
-
-  if (input !== "SEND")
-    return reply("⚠️ Please type *SEND* to start or *CANCEL* to stop.");
-
-  // confirmed
-  delete bulkSessions[sender];
-  const messageToSend = session.message;
-
-  await reply("📂 *Fetching contacts from CSV file...*");
-
+// 🚀 Reusable function for sending bulk messages
+async function startBulkSend(bot, reply, messageToSend) {
   try {
+    await reply("📂 *Fetching contact list from CSV file...*");
+
     const res = await axios.get(CONTACTS_CSV_URL);
     const contacts = await csv().fromString(res.data);
-    if (!contacts.length) return reply("❌ No contacts found.");
 
-    await reply(`✅ *Found ${contacts.length} contacts.*\n🚀 Starting broadcast...`);
+    if (!contacts.length)
+      return reply("❌ No contacts found in your CSV file.");
 
-    const delay = 4000; // 4 s
+    await reply(`✅ *Found ${contacts.length} contacts.*\n🚀 Starting to send messages...\n🕐 Please wait.`);
+
+    const delay = 4000; // 4 seconds delay (anti-ban)
     let sent = 0;
 
     for (const c of contacts) {
-      const num = (c.Phone || c.phone || "").replace(/\D/g, "");
-      if (!num) continue;
+      const raw = c.Phone || c.phone || c.Number || c.number;
+      if (!raw) continue;
 
       const name = c.Name || c.name || "Friend";
-      const jid = `${num}@s.whatsapp.net`;
-      const textMsg = `👋 *Hello ${name}!* \n\n${messageToSend}`;
+      const number = raw.replace(/\D/g, "");
+      const jid = `${number}@s.whatsapp.net`;
+
+      const personalized = `👋 *Hello ${name}!* \n\n${messageToSend}`;
 
       try {
-        await bot.sendMessage(jid, { text: textMsg });
-        console.log(`✅ Sent to ${name} (${num})`);
+        await bot.sendMessage(jid, { text: personalized });
+        console.log(`✅ Sent to ${name} (${number})`);
         sent++;
       } catch (err) {
-        console.log(`❌ Failed to send to ${name} (${num}): ${err.message}`);
+        console.log(`❌ Failed to send to ${name} (${number}): ${err.message}`);
       }
 
       await new Promise(r => setTimeout(r, delay));
@@ -93,7 +84,7 @@ cmd({
     await reply(`🎉 *Bulk messaging completed!* ✅ Sent to ${sent} contacts.`);
 
   } catch (err) {
-    console.error("Bulk error:", err.message);
-    await reply("❌ Failed to read CSV or send messages. Check your link or network.");
+    console.error("Bulk send error:", err.message);
+    await reply("❌ Failed to fetch contacts or send messages. Check your CSV link or internet connection.");
   }
-});
+}
