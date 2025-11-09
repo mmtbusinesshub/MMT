@@ -1,6 +1,5 @@
 const fs = require("fs");
 const path = require("path");
-const Papa = require("papaparse"); // if your bot already uses this, else use simple split
 const config = require("../config");
 const { cmd } = require("../command");
 const { sleep } = require("../lib/functions");
@@ -33,7 +32,7 @@ cmd({
     const csvData = fs.readFileSync(csvPath, "utf8");
     const rows = csvData.split("\n").slice(1); // skip header line
     const contacts = rows
-      .map(line => line.trim().split("\t")[1]) // assuming tab-separated
+      .map(line => line.trim().split(",")[1]) // split by comma, second column is phone
       .filter(num => num && num.match(/^\d+$/));
 
     if (contacts.length === 0) return reply("⚠️ No valid contacts found in contacts.csv.");
