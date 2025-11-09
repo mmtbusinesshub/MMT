@@ -3,8 +3,8 @@ const axios = require("axios");
 const csv = require("csvtojson");
 
 // 🔒 OWNER SETTINGS
-const OWNER_NUMBER = "94712345678"; // <-- your WhatsApp number (without +)
-const CONTACTS_CSV_URL = "https://raw.githubusercontent.com/yourusername/yourrepo/main/contacts.csv"; // <-- raw CSV link
+const OWNER_NUMBER = "94774915917"; // <-- your WhatsApp number (without +)
+const CONTACTS_CSV_URL = "https://raw.githubusercontent.com/mmtbusinesshub/MMT/refs/heads/main/data/contacts.csv"; // <-- raw CSV link
 
 const bulkSessions = {};
 
