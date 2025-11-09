@@ -1,15 +1,20 @@
 const fs = require("fs");
 const path = require("path");
-const { parse } = require("csv-parse/sync");
+const { parse } = require("csv-parse");
 const { cmd } = require("../command");
 
-const OWNER_JID = "94774915917@s.whatsapp.net"; // change to your real owner JID
+const OWNER_JID = "94774915917@s.whatsapp.net"; // 🔒 Change this to your real owner number JID
+
+// Paths to CSV files containing contacts
 const CONTACT_PATHS = [
   path.join(__dirname, "..", "data", "contacts.csv"),
   path.join(__dirname, "..", "data", "contacts2.csv"),
 ];
 
-// Load all contacts from CSV
+// Temporary memory to hold pending bulk state
+const pendingBulk = {};
+
+// 🧩 Load contacts from CSV files
 function loadContacts() {
   const contacts = [];
   for (const filePath of CONTACT_PATHS) {
@@ -27,9 +32,7 @@ function loadContacts() {
   return contacts;
 }
 
-let pendingBulk = null;
-
-// ✅ Command to start bulk messaging
+// 🧨 Command to start bulk messaging
 cmd(
   {
     pattern: "bulk",
@@ -39,36 +42,39 @@ cmd(
     filename: __filename,
   },
   async (conn, mek, m, { sender, reply }) => {
-    if (sender !== OWNER_JID) {
-      return reply("⛔ Only the owner can use this command.");
+    try {
+      if (sender !== OWNER_JID) {
+        return reply("⛔ Only the *owner* can use this command.");
+      }
+
+      reply(
+        "📝 *Please type the message you want to send to your contact list.*\n\n✍️ I'll wait for your next message."
+      );
+
+      // Store waiting state
+      pendingBulk[sender] = {
+        step: "awaitingMessage",
+        time: Date.now(),
+      };
+    } catch (err) {
+      console.error("Bulk start error:", err);
+      reply("❌ Something went wrong while starting bulk mode.");
     }
-
-    reply(
-      "📝 *Please type the message you want to send to your contact list.*\n\n✍️ I'll wait for your next message."
-    );
-
-    pendingBulk = {
-      started: true,
-      from: sender,
-      key: mek.key, // to track original message
-      time: Date.now(),
-    };
   }
 );
 
-// ✅ Filter to catch the owner's next message
-cmd.filter(
-  (text, { sender, message }) => {
-    return (
-      pendingBulk &&
-      pendingBulk.started &&
-      sender === pendingBulk.from &&
-      message?.key // 🧠 check that message exists before accessing key
-    );
+// 🧩 Reply-based handler to catch owner’s message
+cmd(
+  {
+    on: "message",
   },
-  async (conn, mek, m, { sender, reply, body }) => {
+  async (conn, mek, m, { sender, body, reply }) => {
     try {
-      if (!pendingBulk) return;
+      if (!pendingBulk[sender]) return; // only continue if user is in pending state
+      if (sender !== OWNER_JID) return;
+
+      const state = pendingBulk[sender];
+      if (state.step !== "awaitingMessage") return;
 
       const msg = body?.trim();
       if (!msg) return reply("❌ Please send a valid message.");
@@ -83,18 +89,22 @@ cmd.filter(
 
       let sent = 0;
       for (const jid of contacts) {
-        await conn.sendMessage(jid, { text: msg });
-        sent++;
-        await new Promise((r) => setTimeout(r, 1500)); // 1.5s delay
+        try {
+          await conn.sendMessage(jid, { text: msg });
+          sent++;
+          await new Promise((r) => setTimeout(r, 1500)); // Delay to prevent spam
+        } catch (sendErr) {
+          console.log("Failed to send to:", jid, sendErr.message);
+        }
       }
 
-      reply(`✅ Bulk message sent to *${sent}* contacts successfully!`);
+      reply(`✅ Successfully sent your message to *${sent}* contacts!`);
 
-      pendingBulk = null; // clear state
+      delete pendingBulk[sender]; // clear memory
     } catch (err) {
-      console.error("Bulk error:", err);
-      reply("❌ Failed to send bulk message. Check console for details.");
-      pendingBulk = null;
+      console.error("Bulk sending error:", err);
+      reply("❌ Failed to send messages. Check console for details.");
+      delete pendingBulk[sender];
     }
   }
 );
