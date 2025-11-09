@@ -3,8 +3,8 @@ const axios = require("axios");
 const csv = require("csvtojson");
 
 // 🔒 OWNER SETTINGS
-const OWNER_NUMBER = "94774915917"; // <-- your number (no +)
-const CONTACTS_CSV_URL = "https://raw.githubusercontent.com/mmtbusinesshub/MMT/refs/heads/main/data/contacts.csv"; // <-- raw CSV link
+const OWNER_NUMBER = "94774915917"; // your WhatsApp number without +
+const CONTACTS_CSV_URL = "https://raw.githubusercontent.com/mmtbusinesshub/MMT/refs/heads/main/data/contacts.csv"; // CSV raw link
 
 const bulkSessions = {};
 
@@ -14,28 +14,31 @@ cmd({
   desc: "Send bulk messages to contacts (interactive mode)",
   category: "owner",
   filename: __filename
-}, async (bot, mek, m, { sender, reply }) => {
+}, async (bot, mek, m, { sender, reply, fromMe }) => {
+
+  // ✅ Only allow owner to start
   if (!sender.includes(OWNER_NUMBER))
     return reply("❌ You are not authorized to use this command.");
 
+  // ✅ Start session and wait for next message from owner
   bulkSessions[sender] = { stage: "waitingForMessage", lastCommandTime: Date.now() };
-  await reply("📝 *Please type the message you want to send to your contact list.*\n\n✍️ I'll wait for your next message.");
+
+  await reply("📝 *Please type the message you want to send to your contact list.*\n\n✍️ I'll wait for your next message (don’t send another command).");
 });
 
 
-// 🧠 STEP 2 – Capture next message only
+// 🧠 STEP 2 – Capture next owner message only
 cmd({
   filter: (text, { sender, fromMe }) =>
-    bulkSessions[sender]?.stage === "waitingForMessage" && !fromMe // ⛔ ignore bot’s own replies
+    bulkSessions[sender]?.stage === "waitingForMessage" &&
+    sender.includes(OWNER_NUMBER) && !fromMe // ✅ only owner, and not bot’s own reply
 }, async (bot, mek, m, { sender, body, reply }) => {
+  const messageToSend = body?.trim();
 
-  const messageToSend = body.trim();
-
-  // Ignore accidental resend of `.bulk`
-  if (messageToSend.startsWith(".bulk")) return reply("⚠️ Please type your message, not a command.");
-
-  if (!messageToSend)
-    return reply("❌ Please type a valid message.");
+  // Ignore accidental resend of .bulk
+  if (!messageToSend || messageToSend.startsWith(".bulk")) {
+    return reply("⚠️ Please type your message, not a command.");
+  }
 
   // End waiting session
   delete bulkSessions[sender];
