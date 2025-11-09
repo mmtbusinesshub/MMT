@@ -3,44 +3,42 @@ const axios = require("axios");
 const csv = require("csvtojson");
 
 // 🔒 OWNER SETTINGS
-const OWNER_NUMBER = "94774915917"; // <-- your WhatsApp number (without +)
-const CONTACTS_CSV_URL = "https://raw.githubusercontent.com/mmtbusinesshub/MMT/refs/heads/main/data/contacts.csv"; // <-- raw CSV link
+const OWNER_NUMBER = "94712345678"; // <-- your WhatsApp number (without +)
+const CONTACTS_CSV_URL = "https://raw.githubusercontent.com/yourusername/yourrepo/main/contacts.csv"; // <-- raw CSV link
 
 const bulkSessions = {};
 
-// 🧠 STEP 1 – Handle .bulk command (with or without message)
+// 🧠 STEP 1 – Handle .bulk command (interactive only)
 cmd({
   pattern: "bulk",
-  desc: "Send bulk messages to contacts",
+  desc: "Send bulk messages to contacts (interactive mode)",
   category: "owner",
   filename: __filename
-}, async (bot, mek, m, { sender, q, reply }) => {
+}, async (bot, mek, m, { sender, reply }) => {
 
   // Owner-only check
   if (!sender.includes(OWNER_NUMBER))
     return reply("❌ You are not authorized to use this command.");
 
-  // If user gave a message directly (e.g. .bulk Hello friends!)
-  if (q && q.trim().length > 0) {
-    return startBulkSend(bot, reply, q.trim());
-  }
-
-  // Otherwise, ask for message text
+  // Start interactive session
   bulkSessions[sender] = { stage: "ask" };
   await reply("📝 *Please type the message you want to send to your contact list.*");
 });
 
 
-// 🧠 STEP 2 – Capture message text (interactive mode)
+// 🧠 STEP 2 – Capture message text
 cmd({
   filter: (text, { sender }) => bulkSessions[sender]?.stage === "ask",
 }, async (bot, mek, m, { sender, body, reply }) => {
 
-  const message = body.trim();
-  if (!message) return reply("❌ Please type a valid message.");
+  const messageToSend = body.trim();
+  if (!messageToSend) return reply("❌ Please type a valid message.");
 
-  delete bulkSessions[sender]; // done with this session
-  await startBulkSend(bot, reply, message);
+  // End session
+  delete bulkSessions[sender];
+
+  // Start sending messages
+  await startBulkSend(bot, reply, messageToSend);
 });
 
 
@@ -68,6 +66,7 @@ async function startBulkSend(bot, reply, messageToSend) {
       const number = raw.replace(/\D/g, "");
       const jid = `${number}@s.whatsapp.net`;
 
+      // Always append the owner message
       const personalized = `👋 *Hello ${name}!* \n\n${messageToSend}`;
 
       try {
