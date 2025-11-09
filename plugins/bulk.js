@@ -1,146 +1,172 @@
 const fs = require("fs");
 const path = require("path");
-const config = require("../config.js");
+const { parse } = require("csv-parse/sync");
+const { cmd } = require("../command");
 
-const channelJid = '120363423526129509@newsletter'; 
-const channelName = 'ミ★ 𝙈𝙈𝙏 𝘽𝙐𝙎𝙄𝙉𝙀𝙎𝙎 𝙃𝙐𝘽 ★彡'; 
-const serviceLogo = "https://github.com/mmtbusinesshub/MMT/blob/main/images/download.png?raw=true";
+// ============================
+// CONFIGURATION
+// ============================
+const OWNER_JID = "94774915917@s.whatsapp.net"; // 🔒 Change to your number JID
+const CONTACT_PATHS = [
+  path.join(__dirname, "..", "data", "contacts.csv"),
+  path.join(__dirname, "..", "data", "contacts.json"),
+];
 
-const pendingBroadcast = new Map();
+const BULK_DELAY_MIN = 10000; // 10s minimum delay
+const BULK_DELAY_MAX = 25000; // 25s maximum delay
+const MAX_RETRIES = 2;
 
-module.exports = {
-  onMessage: async (conn, mek) => {
-    try {
-      const key = mek.key;
-      const content = mek.message;
-      if (!content) return;
+const pendingBulk = {}; // stores pending sessions per sender
 
-      const text =
-        content.conversation ||
-        content.extendedTextMessage?.text ||
-        content.imageMessage?.caption ||
-        content.videoMessage?.caption ||
-        content.documentMessage?.caption ||
-        "";
+// ============================
+// HELPERS
+// ============================
+function getRandomDelay() {
+  return BULK_DELAY_MIN + Math.random() * (BULK_DELAY_MAX - BULK_DELAY_MIN);
+}
 
-      if (!text.trim()) return;
+function sleep(ms) {
+  return new Promise((res) => setTimeout(res, ms));
+}
 
-      const msg = text.trim();
-      const from = key.remoteJid;
-      const sender = key.participant || from;
+function loadContacts() {
+  for (const file of CONTACT_PATHS) {
+    if (fs.existsSync(file)) {
+      const ext = path.extname(file).toLowerCase();
+      const data = fs.readFileSync(file, "utf-8");
 
-      const ownerNumber = config.BOT_OWNER.includes("@s.whatsapp.net")
-        ? config.BOT_OWNER
-        : `${config.BOT_OWNER}@s.whatsapp.net`;
-
-      // 🧠 Only respond if message is from the bot owner number
-      if (sender !== ownerNumber && from !== ownerNumber) return;
-
-      console.log("📢 [MMT BROADCAST] Message received from owner:", msg);
-
-      // ✅ Step 1: Detect "bulk" command
-      if (msg.toLowerCase() === "bulk") {
-        pendingBroadcast.set(sender, { step: "awaiting_message" });
-
-        const instructionText = `📢 *BROADCAST MODE ACTIVATED*\n────────────────────\n✅ Please send the message you want to send to your contact list.\n\n💡 You can use *{name}* in your message to personalize each message.\n────────────────────\n📂 contacts.csv must be in the /data folder.\n────────────────────`;
-
-        await conn.sendMessage(from, {
-          image: { url: serviceLogo },
-          caption: instructionText,
-          contextInfo: {
-            forwardingScore: 999,
-            isForwarded: true,
-            forwardedNewsletterMessageInfo: {
-              newsletterJid: channelJid,
-              newsletterName: channelName,
-              serverMessageId: -1,
-            },
-          },
-        }, { quoted: mek });
-
-        console.log("📢 [MMT BROADCAST] Waiting for broadcast message...");
-        return;
+      if (ext === ".json") {
+        const arr = JSON.parse(data);
+        return arr.map((x) => ({
+          name: x.name || "",
+          phone: (x.phone || "").toString().replace(/[^0-9]/g, ""),
+        }));
+      } else if (ext === ".csv") {
+        const records = parse(data, { columns: true, skip_empty_lines: true });
+        return records.map((r) => ({
+          name: r.Name || r.name || "",
+          phone: (r.Phone || r.phone || "").toString().replace(/[^0-9]/g, ""),
+        }));
       }
+    }
+  }
+  return [];
+}
 
-      // ✅ Step 2: Handle the broadcast message
-      if (pendingBroadcast.has(sender)) {
-        const { step } = pendingBroadcast.get(sender);
+// ============================
+// COMMAND: .whatsapp
+// ============================
+cmd({
+  pattern: "whatsapp",
+  react: "💬",
+  desc: "Send bulk WhatsApp messages to uploaded contacts",
+  category: "crm",
+  filename: __filename,
+}, async (bot, mek, m, { reply, sender }) => {
+  if (sender !== OWNER_JID) return reply("🚫 Owner-only command.");
 
-        if (step === "awaiting_message") {
-          pendingBroadcast.delete(sender);
+  const contacts = loadContacts();
+  if (!contacts.length)
+    return reply("⚠️ No contacts found. Upload your CSV or JSON file to /data folder.");
 
-          const csvPath = path.join(__dirname, "../data/contacts.csv");
+  await reply(
+    `📢 *BULK MESSAGE MODE*\n────────────────────\n✅ Loaded *${contacts.length} contacts.*\n\nPlease *reply with the message* you want to send to all.\n\nYou can use *{name}* in your message to personalize each text.\n\nType *CANCEL* to abort.`
+  );
 
-          if (!fs.existsSync(csvPath)) {
-            await conn.sendMessage(from, {
-              text: "❌ *Error:* contacts.csv not found in /data folder.",
-            }, { quoted: mek });
-            return;
-          }
+  pendingBulk[sender] = {
+    step: "await_message",
+    contacts,
+  };
+});
 
-          const csvData = fs.readFileSync(csvPath, "utf8").trim();
-          const separator = csvData.includes("\t") ? "\t" : ",";
-          const lines = csvData.split(/\r?\n/);
-          const contacts = [];
+// ============================
+// REPLY HANDLER
+// ============================
+cmd({
+  filter: (text, { sender }) => pendingBulk[sender] && pendingBulk[sender].step === "await_message"
+}, async (bot, mek, m, { reply, sender, body }) => {
+  const msg = body.trim();
+  if (msg.toLowerCase() === "cancel") {
+    delete pendingBulk[sender];
+    return reply("❌ Bulk message cancelled.");
+  }
 
-          for (let i = 1; i < lines.length; i++) {
-            const [name, phone] = lines[i].split(separator).map((v) => v.trim());
-            if (phone && /^\d+$/.test(phone)) {
-              contacts.push({ name: name || "Customer", phone });
-            }
-          }
+  const session = pendingBulk[sender];
+  delete pendingBulk[sender];
 
-          if (contacts.length === 0) {
-            await conn.sendMessage(from, {
-              text: "⚠️ *No valid contacts found* in contacts.csv.",
-            }, { quoted: mek });
-            return;
-          }
+  session.messageText = msg;
+  session.stop = false;
 
-          await conn.sendMessage(from, {
-            text: `🚀 Sending your message to *${contacts.length}* contacts...`,
-          }, { quoted: mek });
+  await reply(
+    `🚀 Sending your message to *${session.contacts.length}* contacts...\n\nType *STOP* anytime to halt.`
+  );
 
-          let success = 0;
-          for (const { name, phone } of contacts) {
-            try {
-              const jid = `${phone}@s.whatsapp.net`;
-              const personalized = msg.replace(/{name}/gi, name);
+  pendingBulk[sender] = { ...session, step: "sending" };
+  startBulkSend(bot, sender, session);
+});
 
-              await conn.sendMessage(jid, {
-                text: personalized,
-              });
-              success++;
-              await new Promise((r) => setTimeout(r, 500)); // delay between messages
-            } catch (err) {
-              console.log(`❌ [MMT BROADCAST] Failed to send to ${phone}:`, err.message);
-            }
-          }
+// Stop command handler
+cmd({
+  filter: (text, { sender }) => pendingBulk[sender] && pendingBulk[sender].step === "sending" && text.trim().toLowerCase() === "stop"
+}, async (bot, mek, m, { reply, sender }) => {
+  pendingBulk[sender].stop = true;
+  await reply("🛑 Stopping bulk message process...");
+});
 
-          const summaryText = `✅ *BROADCAST COMPLETED*\n────────────────────\n📬 Successfully sent to *${success}* of *${contacts.length}* contacts.\n────────────────────`;
+// ============================
+// BULK SENDER LOGIC
+// ============================
+async function startBulkSend(bot, owner, session) {
+  const contacts = session.contacts;
+  const message = session.messageText;
+  const log = [];
+  let sent = 0;
+  let failed = 0;
 
-          await conn.sendMessage(from, {
-            image: { url: serviceLogo },
-            caption: summaryText,
-            contextInfo: {
-              forwardingScore: 999,
-              isForwarded: true,
-              forwardedNewsletterMessageInfo: {
-                newsletterJid: channelJid,
-                newsletterName: channelName,
-                serverMessageId: -1,
-              },
-            },
-          }, { quoted: mek });
+  for (const c of contacts) {
+    if (session.stop) break;
 
-          console.log(`📢 [MMT BROADCAST] Sent to ${success}/${contacts.length} contacts.`);
+    const jid = `${c.phone}@s.whatsapp.net`;
+    const text = message.replace(/\{name\}/g, c.name || "there");
+
+    let success = false;
+    let attempts = 0;
+
+    while (!success && attempts <= MAX_RETRIES) {
+      attempts++;
+      try {
+        await bot.sendMessage(jid, { text });
+        success = true;
+        sent++;
+        log.push({ phone: c.phone, name: c.name, status: "sent" });
+      } catch (err) {
+        if (attempts > MAX_RETRIES) {
+          failed++;
+          log.push({ phone: c.phone, name: c.name, status: "failed", error: err.message });
+        } else {
+          await sleep(2000);
         }
       }
-    } catch (err) {
-      console.error("❌ [MMT BROADCAST] Plugin error:", err);
-      await conn.sendMessage(mek.key.remoteJid, {
-        text: "❌ *An error occurred while processing your broadcast request.*",
-      }, { quoted: mek });
     }
-  },
-};
+
+    await sleep(getRandomDelay());
+
+    if ((sent + failed) % 10 === 0) {
+      await bot.sendMessage(owner, { text: `📤 Progress: ${sent} sent, ${failed} failed.` });
+    }
+  }
+
+  const result = `✅ *Bulk message process complete!*\n\n📬 Sent: ${sent}\n❌ Failed: ${failed}`;
+  await bot.sendMessage(owner, { text: result });
+
+  const logPath = path.join(__dirname, "..", "data", `bulk_log_${Date.now()}.json`);
+  fs.writeFileSync(logPath, JSON.stringify(log, null, 2));
+
+  await bot.sendMessage(owner, {
+    document: fs.readFileSync(logPath),
+    fileName: path.basename(logPath),
+    mimetype: "application/json",
+  });
+
+  delete pendingBulk[owner];
+}
