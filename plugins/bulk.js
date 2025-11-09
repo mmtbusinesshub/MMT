@@ -13,7 +13,7 @@ const BULK_DELAY_MIN = 10000;
 const BULK_DELAY_MAX = 25000;
 const MAX_RETRIES = 2;
 
-const sessions = {}; // tracks pending sessions
+const sessions = {};
 
 function getRandomDelay() {
   return BULK_DELAY_MIN + Math.random() * (BULK_DELAY_MAX - BULK_DELAY_MIN);
@@ -70,64 +70,70 @@ cmd({
   // Ask owner for message text
   await reply(`📢 *BULK MESSAGE MODE*\n────────────────────\n✅ Loaded *${contacts.length} contacts.*\n\nPlease *type your message* that you want to send to all contacts.\n\nYou can use *{name}* in your message to personalize each text.\n\nType *CANCEL* to abort.`);
 
-  // store pending session
+  // Store pending session - WAITING for message
   sessions[sender] = {
-    step: "awaiting_message", // WAITING for user to type message
+    step: "awaiting_message",
     contacts,
     createdAt: Date.now()
   };
   
-  console.log(`📝 Session created for ${sender}. Waiting for message input...`);
+  console.log(`📝 Session created for ${sender}. Waiting for message...`);
 });
 
 // ============================
-// SIMPLIFIED REPLY HANDLER
+// MESSAGE INPUT HANDLER (Like Movie Plugin)
 // ============================
 cmd({
-  on: "text"
+  filter: (text, { sender }) => {
+    // Check if user has pending session and is waiting for message
+    return sessions[sender] && sessions[sender].step === "awaiting_message";
+  }
 }, async (bot, mek, m, { sender, body, reply }) => {
-  // Only process owner messages
-  if (sender !== OWNER_JID) return;
+  console.log(`📨 Message input handler triggered for ${sender}`);
   
   const session = sessions[sender];
-  if (!session) return; // No active session
-  
+  if (!session) return;
+
   const msg = body?.trim();
   if (!msg) return;
 
-  console.log(`📨 Received message from owner: "${msg}"`);
-  console.log(`🔍 Current session step: ${session.step}`);
+  console.log(`📝 Received message: "${msg}"`);
 
-  // Handle CANCEL command
+  // Handle cancel
   if (msg.toLowerCase() === "cancel") {
     delete sessions[sender];
-    console.log(`❌ Session cancelled by owner`);
+    console.log(`❌ Session cancelled`);
     return reply("❌ Bulk message cancelled.");
   }
 
-  // Handle STOP command during sending
-  if (msg.toLowerCase() === "stop" && session.step === "sending") {
-    session.stop = true;
-    console.log(`🛑 Stop command received during sending`);
-    return reply("🛑 Stopping bulk message process...");
+  // Process the message
+  session.message = msg;
+  session.step = "sending";
+  session.stop = false;
+
+  await reply(`🚀 Starting to send your message to *${session.contacts.length}* contacts...\n\nType *STOP* anytime to halt sending.`);
+
+  console.log(`📤 Starting bulk send to ${session.contacts.length} contacts`);
+  
+  // Start bulk sending
+  startBulkSend(bot, sender, session);
+});
+
+// ============================
+// STOP COMMAND HANDLER
+// ============================
+cmd({
+  filter: (text, { sender }) => {
+    return sessions[sender] && 
+           sessions[sender].step === "sending" && 
+           text.toLowerCase() === "stop";
   }
-
-  // Handle message input - ONLY when waiting for message
-  if (session.step === "awaiting_message") {
-    console.log(`✅ Processing message input for bulk send`);
-    
-    // Update session with the message and change step
-    session.message = msg;
-    session.step = "sending";
-    session.stop = false;
-
-    // Confirm and start sending
-    await reply(`🚀 Starting to send your message to *${session.contacts.length}* contacts...\n\nType *STOP* anytime to halt sending.`);
-    
-    console.log(`📤 Starting bulk send to ${session.contacts.length} contacts`);
-    
-    // Start the bulk sending process
-    startBulkSend(bot, sender, session);
+}, async (bot, mek, m, { sender, reply }) => {
+  console.log(`🛑 Stop command received`);
+  const session = sessions[sender];
+  if (session) {
+    session.stop = true;
+    await reply("🛑 Stopping bulk message process...");
   }
 });
 
@@ -140,13 +146,12 @@ async function startBulkSend(bot, owner, session) {
   let sent = 0;
   let failed = 0;
 
-  console.log(`🎯 Beginning bulk send with message: "${message.substring(0, 50)}..."`);
+  console.log(`🎯 Starting bulk send with message: "${message}"`);
 
   try {
     for (let i = 0; i < contacts.length; i++) {
-      // Check if stop command was received
       if (session.stop) {
-        console.log(`⏹️ Bulk send stopped by owner`);
+        console.log(`⏹️ Bulk send stopped`);
         await bot.sendMessage(owner, { 
           text: `⏹️ Process stopped.\n\n📬 Sent: ${sent}\n❌ Failed: ${failed}\n📋 Remaining: ${contacts.length - (sent + failed)}`
         });
@@ -155,7 +160,7 @@ async function startBulkSend(bot, owner, session) {
 
       const c = contacts[i];
       
-      // Skip if phone number is invalid
+      // Validate phone number
       if (!c.phone || c.phone.length < 8) {
         failed++;
         log.push({ phone: c.phone, name: c.name, status: "invalid_number" });
@@ -178,7 +183,7 @@ async function startBulkSend(bot, owner, session) {
           log.push({ phone: c.phone, name: c.name, status: "sent" });
           console.log(`✅ Sent to ${c.phone}`);
         } catch (err) {
-          console.error(`Failed to send to ${c.phone} (attempt ${tries}):`, err.message);
+          console.error(`❌ Failed to send to ${c.phone}:`, err.message);
           if (tries > MAX_RETRIES) {
             failed++;
             log.push({ phone: c.phone, name: c.name, status: "failed", error: err.message });
@@ -188,8 +193,8 @@ async function startBulkSend(bot, owner, session) {
         }
       }
 
-      // Progress updates every 5 messages
-      if ((sent + failed) % 5 === 0) {
+      // Progress updates
+      if ((sent + failed) % 5 === 0 || (sent + failed) === contacts.length) {
         const progress = Math.round(((sent + failed) / contacts.length) * 100);
         await bot.sendMessage(owner, { 
           text: `📤 Progress: ${sent} sent, ${failed} failed. (${progress}%)`
@@ -197,10 +202,10 @@ async function startBulkSend(bot, owner, session) {
         console.log(`📊 Progress: ${sent}/${contacts.length} (${progress}%)`);
       }
 
-      // Delay between messages (except for the last one)
+      // Delay between messages
       if (i < contacts.length - 1 && !session.stop) {
         const delay = getRandomDelay();
-        console.log(`⏳ Waiting ${Math.round(delay/1000)}s before next message...`);
+        console.log(`⏳ Waiting ${Math.round(delay/1000)}s...`);
         await sleep(delay);
       }
     }
@@ -211,7 +216,7 @@ async function startBulkSend(bot, owner, session) {
       : `✅ *Bulk message complete!*\n📬 Sent: ${sent}\n❌ Failed: ${failed}\n📋 Total: ${contacts.length}`;
 
     await bot.sendMessage(owner, { text: summary });
-    console.log(`🎉 Bulk send completed: ${summary}`);
+    console.log(`🎉 Bulk send completed: ${sent} sent, ${failed} failed`);
 
     // Save log file
     if (sent > 0 || failed > 0) {
@@ -219,21 +224,20 @@ async function startBulkSend(bot, owner, session) {
       fs.writeFileSync(logPath, JSON.stringify(log, null, 2));
       await bot.sendMessage(owner, {
         document: fs.readFileSync(logPath),
-        fileName: `bulk_report_${new Date().toISOString().split('T')[0]}.json`,
+        fileName: `bulk_report.json`,
         mimetype: "application/json",
       });
     }
   } catch (err) {
-    console.error("Bulk send error:", err);
+    console.error("💥 Bulk send error:", err);
     await bot.sendMessage(owner, { text: `❌ Bulk send failed: ${err.message}` });
   } finally {
-    // Clean up session
     delete sessions[owner];
-    console.log(`🧹 Session cleaned up for ${owner}`);
+    console.log(`🧹 Session cleaned up`);
   }
 }
 
-// Session cleanup every 30 minutes
+// Cleanup old sessions every 30 minutes
 setInterval(() => {
   const now = Date.now();
   Object.keys(sessions).forEach(jid => {
@@ -243,3 +247,5 @@ setInterval(() => {
     }
   });
 }, 30 * 60 * 1000);
+
+console.log("✅ WhatsApp Bulk Plugin Loaded");
