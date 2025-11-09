@@ -28,18 +28,23 @@ function loadContacts() {
     if (fs.existsSync(file)) {
       const ext = path.extname(file).toLowerCase();
       const data = fs.readFileSync(file, "utf-8");
-      if (ext === ".json") {
-        const arr = JSON.parse(data);
-        return arr.map((x) => ({
-          name: x.name || "",
-          phone: (x.phone || "").toString().replace(/[^0-9]/g, ""),
-        }));
-      } else if (ext === ".csv") {
-        const records = parse(data, { columns: true, skip_empty_lines: true });
-        return records.map((r) => ({
-          name: r.Name || r.name || "",
-          phone: (r.Phone || r.phone || "").toString().replace(/[^0-9]/g, ""),
-        }));
+      try {
+        if (ext === ".json") {
+          const arr = JSON.parse(data);
+          return arr.map((x) => ({
+            name: x.name || "",
+            phone: (x.phone || "").toString().replace(/[^0-9]/g, ""),
+          }));
+        } else if (ext === ".csv") {
+          const records = parse(data, { columns: true, skip_empty_lines: true });
+          return records.map((r) => ({
+            name: r.Name || r.name || "",
+            phone: (r.Phone || r.phone || "").toString().replace(/[^0-9]/g, ""),
+          }));
+        }
+      } catch (error) {
+        console.error(`Error parsing ${file}:`, error);
+        continue;
       }
     }
   }
@@ -63,27 +68,30 @@ cmd({
     return reply("⚠️ No contacts found. Upload your CSV or JSON file to /data folder.");
 
   // Ask owner for message text
-  await bot.sendMessage(sender, {
-    text: `📢 *BULK MESSAGE MODE*\n────────────────────\n✅ Loaded *${contacts.length} contacts.*\n\nPlease *type your message* that you want to send to all contacts.\n\nYou can use *{name}* in your message to personalize each text.\n\nType *CANCEL* to abort.`
-  });
+  await reply(`📢 *BULK MESSAGE MODE*\n────────────────────\n✅ Loaded *${contacts.length} contacts.*\n\nPlease *type your message* that you want to send to all contacts.\n\nYou can use *{name}* in your message to personalize each text.\n\nType *CANCEL* to abort.`);
 
   // store pending session
   sessions[sender] = {
     step: "awaiting_message",
-    contacts
+    contacts,
+    createdAt: Date.now()
   };
 });
 
 // ============================
-// OWNER REPLY HANDLER
+// FIXED REPLY HANDLER
 // ============================
 cmd({
-  on: "text",
+  filter: (text, { sender }) => {
+    // Check if user has an active session AND message is not a command
+    return sessions[sender] && 
+           !text.startsWith('.') && 
+           !text.startsWith('!') && 
+           sessions[sender].step === "awaiting_message";
+  }
 }, async (bot, mek, m, { sender, body, reply }) => {
-  if (sender !== OWNER_JID) return; // only owner can trigger
-
   const session = sessions[sender];
-  if (!session) return; // no pending session
+  if (!session) return;
 
   const msg = body?.trim();
   if (!msg) return;
@@ -94,13 +102,7 @@ cmd({
     return reply("❌ Bulk message cancelled.");
   }
 
-  // Handle stop
-  if (msg.toLowerCase() === "stop" && session.step === "sending") {
-    session.stop = true;
-    return reply("🛑 Stopping bulk message process...");
-  }
-
-  // Handle message input step
+  // Process the message input
   if (session.step === "awaiting_message") {
     session.message = msg;
     session.step = "sending";
@@ -114,7 +116,24 @@ cmd({
 });
 
 // ============================
-// BULK SEND LOGIC
+// STOP COMMAND HANDLER
+// ============================
+cmd({
+  filter: (text, { sender }) => {
+    return sessions[sender] && 
+           session.step === "sending" && 
+           text.toLowerCase() === "stop";
+  }
+}, async (bot, mek, m, { sender, reply }) => {
+  const session = sessions[sender];
+  if (session && session.step === "sending") {
+    session.stop = true;
+    await reply("🛑 Stopping bulk message process...");
+  }
+});
+
+// ============================
+// BULK SEND LOGIC (Improved)
 // ============================
 async function startBulkSend(bot, owner, session) {
   const { contacts, message } = session;
@@ -147,26 +166,31 @@ async function startBulkSend(bot, owner, session) {
           log.push({ phone: c.phone, name: c.name, status: "sent" });
           console.log(`✅ Sent to ${c.phone}`);
         } catch (err) {
+          console.error(`Failed to send to ${c.phone} (attempt ${tries}):`, err.message);
           if (tries > MAX_RETRIES) {
             failed++;
             log.push({ phone: c.phone, name: c.name, status: "failed", error: err.message });
           } else {
-            await sleep(2000);
+            await sleep(2000 * tries);
           }
         }
       }
 
-      if (i < contacts.length - 1 && !session.stop) {
-        await sleep(getRandomDelay());
-      }
-
-      if ((sent + failed) % 10 === 0 || (sent + failed) === contacts.length) {
+      // Progress updates every 5 messages
+      if ((sent + failed) % 5 === 0 || (sent + failed) === contacts.length) {
         await bot.sendMessage(owner, { 
           text: `📤 Progress: ${sent} sent, ${failed} failed. (${Math.round(((sent + failed) / contacts.length) * 100)}%)`
         });
       }
+
+      // Delay between messages
+      if (i < contacts.length - 1 && !session.stop) {
+        const delay = getRandomDelay();
+        await sleep(delay);
+      }
     }
 
+    // Final summary
     const summary = session.stop
       ? `⏹️ *Process stopped!*\n📬 Sent: ${sent}\n❌ Failed: ${failed}\n📋 Remaining: ${contacts.length - (sent + failed)}`
       : `✅ *Bulk message complete!*\n📬 Sent: ${sent}\n❌ Failed: ${failed}\n📋 Total: ${contacts.length}`;
@@ -179,7 +203,7 @@ async function startBulkSend(bot, owner, session) {
       fs.writeFileSync(logPath, JSON.stringify(log, null, 2));
       await bot.sendMessage(owner, {
         document: fs.readFileSync(logPath),
-        fileName: path.basename(logPath),
+        fileName: `bulk_report_${new Date().toISOString().split('T')[0]}.json`,
         mimetype: "application/json",
       });
     }
@@ -190,3 +214,16 @@ async function startBulkSend(bot, owner, session) {
     delete sessions[owner];
   }
 }
+
+// ============================
+// SESSION CLEANUP (Optional)
+// ============================
+// Clean up old sessions every hour
+setInterval(() => {
+  const now = Date.now();
+  Object.keys(sessions).forEach(jid => {
+    if (now - sessions[jid].createdAt > 30 * 60 * 1000) { // 30 minutes
+      delete sessions[jid];
+    }
+  });
+}, 60 * 60 * 1000);
