@@ -1,110 +1,112 @@
 const fs = require("fs");
 const path = require("path");
-const { parse } = require("csv-parse");
-const { cmd } = require("../command");
+const config = require("../config.js");
 
-const OWNER_JID = "94774915917@s.whatsapp.net"; // 🔒 Change this to your real owner number JID
+const pendingBroadcast = new Map();
 
-// Paths to CSV files containing contacts
-const CONTACT_PATHS = [
-  path.join(__dirname, "..", "data", "contacts.csv"),
-  path.join(__dirname, "..", "data", "contacts2.csv"),
-];
+module.exports = {
+  onMessage: async (conn, mek) => {
+    try {
+      const key = mek.key;
+      const content = mek.message;
+      if (!content || key.fromMe) return;
 
-// Temporary memory to hold pending bulk state
-const pendingBulk = {};
+      const text =
+        content.conversation ||
+        content.extendedTextMessage?.text ||
+        content.imageMessage?.caption ||
+        content.videoMessage?.caption ||
+        content.documentMessage?.caption ||
+        "";
 
-// 🧩 Load contacts from CSV files
-function loadContacts() {
-  const contacts = [];
-  for (const filePath of CONTACT_PATHS) {
-    if (fs.existsSync(filePath)) {
-      const csvData = fs.readFileSync(filePath, "utf-8");
-      const parsed = parse(csvData, { columns: true, skip_empty_lines: true });
-      for (const row of parsed) {
-        if (row.number) {
-          const jid = row.number.replace(/[^0-9]/g, "") + "@s.whatsapp.net";
-          contacts.push(jid);
+      if (!text.trim()) return;
+
+      const msg = text.trim();
+      const from = key.remoteJid;
+      const sender = key.participant || from;
+
+      // 🧠 Only bot owner can use broadcast
+      const ownerNumber = config.BOT_OWNER.includes("@s.whatsapp.net")
+        ? config.BOT_OWNER
+        : `${config.BOT_OWNER}@s.whatsapp.net`;
+      if (sender !== ownerNumber) return;
+
+      // ✅ Step 1: Trigger broadcast mode
+      if (msg.toLowerCase() === "bulk") {
+        pendingBroadcast.set(sender, { step: "awaiting_message" });
+
+        await conn.sendMessage(from, {
+          text: "📢 *Broadcast Mode Activated!*\n\nPlease send the message you want to send to your contact list.\n\n💡 You can use `{name}` in your message to personalize it for each contact.",
+        });
+        console.log(`[BROADCAST] Owner initiated broadcast mode.`);
+        return;
+      }
+
+      // ✅ Step 2: Check if awaiting broadcast message
+      if (pendingBroadcast.has(sender)) {
+        const { step } = pendingBroadcast.get(sender);
+        if (step === "awaiting_message") {
+          pendingBroadcast.delete(sender);
+
+          // 🧾 Load contacts from data/contacts.csv
+          const csvPath = path.join(__dirname, "../data/contacts.csv");
+          if (!fs.existsSync(csvPath)) {
+            await conn.sendMessage(from, {
+              text: "❌ *Error:* contacts.csv file not found in /data folder.",
+            });
+            return;
+          }
+
+          // Read file
+          const csvData = fs.readFileSync(csvPath, "utf-8");
+
+          // Detect separator (tab or comma)
+          const separator = csvData.includes("\t") ? "\t" : ",";
+
+          const lines = csvData.trim().split(/\r?\n/);
+          const contacts = [];
+
+          for (let i = 1; i < lines.length; i++) {
+            const [name, phone] = lines[i].split(separator).map((v) => v.trim());
+            if (!phone || !/^\d+$/.test(phone)) continue;
+            contacts.push({ name: name || "Customer", phone });
+          }
+
+          if (contacts.length === 0) {
+            await conn.sendMessage(from, {
+              text: "⚠️ No valid contacts found in contacts.csv file.",
+            });
+            return;
+          }
+
+          // ✅ Broadcast message to all contacts
+          await conn.sendMessage(from, {
+            text: `🚀 Sending your message to *${contacts.length}* contacts...`,
+          });
+
+          let success = 0;
+          for (const { name, phone } of contacts) {
+            try {
+              const jid = `${phone}@s.whatsapp.net`;
+              const personalizedMsg = msg.replace(/{name}/gi, name);
+
+              await conn.sendMessage(jid, { text: personalizedMsg });
+              success++;
+              await new Promise((r) => setTimeout(r, 500)); // Delay between sends
+            } catch (err) {
+              console.error(`❌ Failed to send to ${phone}:`, err.message);
+            }
+          }
+
+          await conn.sendMessage(from, {
+            text: `✅ Broadcast completed!\n\n📬 Successfully sent to *${success}* of *${contacts.length}* contacts.`,
+          });
+
+          console.log(`[BROADCAST] Sent to ${success}/${contacts.length} contacts.`);
         }
       }
-    }
-  }
-  return contacts;
-}
-
-// 🧨 Command to start bulk messaging
-cmd(
-  {
-    pattern: "bulk",
-    react: "📝",
-    desc: "Send a bulk message to all contacts",
-    category: "owner",
-    filename: __filename,
-  },
-  async (conn, mek, m, { sender, reply }) => {
-    try {
-      if (sender !== OWNER_JID) {
-        return reply("⛔ Only the *owner* can use this command.");
-      }
-
-      reply(
-        "📝 *Please type the message you want to send to your contact list.*\n\n✍️ I'll wait for your next message."
-      );
-
-      // Store waiting state
-      pendingBulk[sender] = {
-        step: "awaitingMessage",
-        time: Date.now(),
-      };
     } catch (err) {
-      console.error("Bulk start error:", err);
-      reply("❌ Something went wrong while starting bulk mode.");
+      console.error("❌ [BROADCAST] Plugin error:", err);
     }
-  }
-);
-
-// 🧩 Reply-based handler to catch owner’s message
-cmd(
-  {
-    on: "message",
   },
-  async (conn, mek, m, { sender, body, reply }) => {
-    try {
-      if (!pendingBulk[sender]) return; // only continue if user is in pending state
-      if (sender !== OWNER_JID) return;
-
-      const state = pendingBulk[sender];
-      if (state.step !== "awaitingMessage") return;
-
-      const msg = body?.trim();
-      if (!msg) return reply("❌ Please send a valid message.");
-
-      const contacts = loadContacts();
-      if (contacts.length === 0)
-        return reply("⚠️ No contacts found in CSV files.");
-
-      reply(
-        `📢 Sending your message to *${contacts.length}* contacts...\n\n🕒 Please wait, this might take a few minutes.`
-      );
-
-      let sent = 0;
-      for (const jid of contacts) {
-        try {
-          await conn.sendMessage(jid, { text: msg });
-          sent++;
-          await new Promise((r) => setTimeout(r, 1500)); // Delay to prevent spam
-        } catch (sendErr) {
-          console.log("Failed to send to:", jid, sendErr.message);
-        }
-      }
-
-      reply(`✅ Successfully sent your message to *${sent}* contacts!`);
-
-      delete pendingBulk[sender]; // clear memory
-    } catch (err) {
-      console.error("Bulk sending error:", err);
-      reply("❌ Failed to send messages. Check console for details.");
-      delete pendingBulk[sender];
-    }
-  }
-);
+};
