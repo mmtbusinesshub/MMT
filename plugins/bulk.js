@@ -3,46 +3,51 @@ const axios = require("axios");
 const csv = require("csvtojson");
 
 // 🔒 OWNER SETTINGS
-const OWNER_NUMBER = "94774915917"; // <-- your WhatsApp number (without +)
+const OWNER_NUMBER = "94774915917"; // <-- your number (no +)
 const CONTACTS_CSV_URL = "https://raw.githubusercontent.com/mmtbusinesshub/MMT/refs/heads/main/data/contacts.csv"; // <-- raw CSV link
 
 const bulkSessions = {};
 
-// 🧠 STEP 1 – Handle .bulk command (interactive only)
+// 🧠 STEP 1 – Owner starts bulk session
 cmd({
   pattern: "bulk",
   desc: "Send bulk messages to contacts (interactive mode)",
   category: "owner",
   filename: __filename
 }, async (bot, mek, m, { sender, reply }) => {
-
-  // Owner-only check
   if (!sender.includes(OWNER_NUMBER))
     return reply("❌ You are not authorized to use this command.");
 
-  // Start interactive session
-  bulkSessions[sender] = { stage: "ask" };
-  await reply("📝 *Please type the message you want to send to your contact list.*");
+  // Start session, but mark waiting
+  bulkSessions[sender] = { stage: "waitingForMessage", lastCommandTime: Date.now() };
+
+  await reply("📝 *Please type the message you want to send to your contact list.*\n\n✍️ I'll wait for your next message.");
 });
 
 
-// 🧠 STEP 2 – Capture message text
+// 🧠 STEP 2 – Capture next message only
 cmd({
-  filter: (text, { sender }) => bulkSessions[sender]?.stage === "ask",
+  filter: (text, { sender }) =>
+    bulkSessions[sender]?.stage === "waitingForMessage"
 }, async (bot, mek, m, { sender, body, reply }) => {
 
   const messageToSend = body.trim();
-  if (!messageToSend) return reply("❌ Please type a valid message.");
 
-  // End session
+  // Ignore accidental resend of `.bulk`
+  if (messageToSend.startsWith(".bulk")) return reply("⚠️ Please type your message, not a command.");
+
+  if (!messageToSend)
+    return reply("❌ Please type a valid message.");
+
+  // End waiting session
   delete bulkSessions[sender];
 
-  // Start sending messages
+  // Begin sending process
   await startBulkSend(bot, reply, messageToSend);
 });
 
 
-// 🚀 Reusable function for sending bulk messages
+// 🚀 Bulk Sending Logic
 async function startBulkSend(bot, reply, messageToSend) {
   try {
     await reply("📂 *Fetching contact list from CSV file...*");
@@ -53,10 +58,10 @@ async function startBulkSend(bot, reply, messageToSend) {
     if (!contacts.length)
       return reply("❌ No contacts found in your CSV file.");
 
-    await reply(`✅ *Found ${contacts.length} contacts.*\n🚀 Starting to send messages...\n🕐 Please wait.`);
+    await reply(`✅ *Found ${contacts.length} contacts.*\n🚀 Starting to send messages...\n🕐 Please wait...`);
 
-    const delay = 4000; // 4 seconds delay (anti-ban)
-    let sent = 0;
+    const delay = 4000; // ms (4s)
+    let sentCount = 0;
 
     for (const c of contacts) {
       const raw = c.Phone || c.phone || c.Number || c.number;
@@ -66,13 +71,12 @@ async function startBulkSend(bot, reply, messageToSend) {
       const number = raw.replace(/\D/g, "");
       const jid = `${number}@s.whatsapp.net`;
 
-      // Always append the owner message
       const personalized = `👋 *Hello ${name}!* \n\n${messageToSend}`;
 
       try {
         await bot.sendMessage(jid, { text: personalized });
         console.log(`✅ Sent to ${name} (${number})`);
-        sent++;
+        sentCount++;
       } catch (err) {
         console.log(`❌ Failed to send to ${name} (${number}): ${err.message}`);
       }
@@ -80,10 +84,10 @@ async function startBulkSend(bot, reply, messageToSend) {
       await new Promise(r => setTimeout(r, delay));
     }
 
-    await reply(`🎉 *Bulk messaging completed!* ✅ Sent to ${sent} contacts.`);
+    await reply(`🎉 *Bulk messaging completed!*\n✅ Successfully sent to ${sentCount} contacts.`);
 
   } catch (err) {
     console.error("Bulk send error:", err.message);
-    await reply("❌ Failed to fetch contacts or send messages. Check your CSV link or internet connection.");
+    await reply("❌ Failed to fetch contacts or send messages. Please check your CSV URL or internet connection.");
   }
 }
