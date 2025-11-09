@@ -7,7 +7,7 @@ const { sleep } = require("../lib/functions");
 cmd({
   pattern: "bulk",
   react: "📢",
-  desc: "Broadcast media or text with caption to all contacts (Owner Only)",
+  desc: "Broadcast any media or text sent to the bot (Owner Only)",
   category: "owner",
   filename: __filename
 }, async (conn, mek, m, { reply, sender, args }) => {
@@ -15,26 +15,21 @@ cmd({
     const ownerJid = config.BOT_OWNER + "@s.whatsapp.net";
     if (sender !== ownerJid) return reply("❌ Only the bot owner can use this command.");
 
-    // Check if the message contains media
+    // Check if message has media or text
     let messageContent;
-    const quoted = m.quoted && m.quoted.message;
-
-    if (m.message?.imageMessage || m.message?.videoMessage || m.message?.audioMessage || m.message?.stickerMessage) {
-      // Media in the current message
-      messageContent = m.message;
-      // Add caption from args if provided
-      if (args.length) {
-        if (messageContent.imageMessage) messageContent.imageMessage.caption = args.join(" ");
-        if (messageContent.videoMessage) messageContent.videoMessage.caption = args.join(" ");
-        if (messageContent.audioMessage) messageContent.audioMessage.caption = args.join(" ");
-        if (messageContent.stickerMessage) messageContent.stickerMessage.caption = args.join(" ");
+    if (m.quoted && m.quoted.message) {
+      // User replied to a media message with .bulk
+      messageContent = m.quoted.message;
+      // Optional: add extra caption from args
+      if (args.length && messageContent.caption !== undefined) {
+        messageContent.caption = args.join(" ");
       }
-    } else if (m.message?.conversation || m.message?.extendedTextMessage) {
-      // Plain text message
+    } else if (m.message) {
+      // If plain text message
       messageContent = { text: args.join(" ") || m.text };
-      if (!messageContent.text) return reply("⚠️ Send a message or media with .bulk.");
+      if (!messageContent.text) return reply("⚠️ Send a message or reply to media first.");
     } else {
-      return reply("⚠️ Send a media (image/video/audio/sticker) with optional caption and type .bulk.");
+      return reply("⚠️ Send a message or reply to media you want to broadcast.");
     }
 
     // Load contacts
@@ -49,13 +44,14 @@ cmd({
     );
     if (!contacts.length) return reply("⚠️ No valid contacts found.");
 
-    // Track sent contacts
+    // Track sent contacts for resume
     const sentPath = path.join(__dirname, "../data/sent.json");
     const sent = fs.existsSync(sentPath) ? JSON.parse(fs.readFileSync(sentPath)) : [];
     const remainingContacts = contacts.filter(num => !sent.includes(num));
 
     await reply(`📢 Broadcasting to *${remainingContacts.length}* contacts...`);
 
+    // Send in batches
     const BATCH_SIZE = 20;
     for (let i = 0; i < remainingContacts.length; i += BATCH_SIZE) {
       const batch = remainingContacts.slice(i, i + BATCH_SIZE);
@@ -68,12 +64,13 @@ cmd({
           console.error(`❌ Failed to send to ${num}:`, err);
         }
       }));
+      // Save progress
       fs.writeFileSync(sentPath, JSON.stringify(sent, null, 2));
       await sleep(Math.floor(Math.random() * 1300) + 1200);
     }
 
     await reply("✅ Broadcast complete!");
-    fs.unlinkSync(sentPath);
+    fs.unlinkSync(sentPath); // clear progress after done
 
   } catch (err) {
     console.error("Bulk broadcast error:", err);
