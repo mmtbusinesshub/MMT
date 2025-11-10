@@ -5,19 +5,24 @@ const { cmd } = require("../command");
 const { sleep } = require("../lib/functions");
 
 cmd({
-  pattern: "bulk",
+  pattern: "broadcast",
   alias: ["bc"],
   react: "📢",
-  desc: "Send broadcast (supports image, video, audio, doc, sticker) via caption or command text",
+  desc: "Send broadcast (supports image, video, audio, document, sticker)",
   category: "owner",
   filename: __filename
 }, async (conn, mek, m, { reply, sender, args }) => {
   try {
     const ownerJid = config.BOT_OWNER + "@s.whatsapp.net";
+
+    // 🧱 Prevent self-trigger (avoid looping)
+    if (m.key.fromMe || sender === conn.user.id)
+      return; // ignore bot's own messages
+
     if (sender !== ownerJid)
       return reply("❌ Only the bot owner can use this command.");
 
-    // Get caption text (either from caption or text)
+    // 🧠 Get caption
     const captionText =
       (m.message?.imageMessage?.caption ||
         m.message?.videoMessage?.caption ||
@@ -27,7 +32,7 @@ cmd({
         .replace(/^(\.broadcast|\.bc)/i, "")
         .trim();
 
-    // Identify and download media if available
+    // 🖼️ Identify media
     let mediaBuffer = null;
     let mediaType = null;
     const msg = m.message;
@@ -52,7 +57,7 @@ cmd({
     if (!mediaBuffer && !captionText)
       return reply("⚠️ Send a media file *with caption* like:\n`.broadcast Hello everyone!`");
 
-    // Load contacts
+    // 📂 Load contacts
     const csvPath = path.join(__dirname, "../data/contacts.csv");
     if (!fs.existsSync(csvPath))
       return reply("❌ contacts.csv not found in /data folder.");
@@ -70,7 +75,7 @@ cmd({
     if (!contacts.length)
       return reply("⚠️ No valid contacts found in contacts.csv.");
 
-    await reply(`📢 *Starting Broadcast*\n\n🧾 Total Contacts: *${contacts.length}*\n💬 Caption: ${captionText || "_(no caption)_"}\n\nProgress will be shown below 👇`);
+    await reply(`📢 *Starting Broadcast*\n\n👥 Total Contacts: *${contacts.length}*\n💬 Caption: ${captionText || "_(no caption)_"}\n\nSending...`);
 
     let sent = 0, failed = 0;
 
@@ -82,32 +87,35 @@ cmd({
         if (captionText) options.caption = captionText;
 
         if (mediaBuffer) {
-          // Dynamic message type
           await conn.sendMessage(jid, { [mediaType]: mediaBuffer, ...options });
         } else {
-          // Text-only broadcast
           await conn.sendMessage(jid, { text: captionText });
         }
 
         sent++;
+        // ✅ Send progress privately to owner
         await conn.sendMessage(ownerJid, {
-          text: `✅ *Sent to:* ${contacts[i]}\n📤 Progress: ${sent}/${contacts.length}`
-        });
+          text: `✅ Sent to ${contacts[i]} (${sent}/${contacts.length})`,
+        }, { quoted: null });
 
-        await sleep(2000); // avoid spam
+        await sleep(2000);
       } catch (err) {
         failed++;
         await conn.sendMessage(ownerJid, {
-          text: `❌ *Failed to send to:* ${contacts[i]}\n💬 Error: ${err.message}`
-        });
+          text: `❌ Failed to send to ${contacts[i]} (${failed} failed)\n${err.message}`,
+        }, { quoted: null });
       }
     }
 
     await conn.sendMessage(ownerJid, {
-      text: `📢 *Broadcast Completed!*\n\n✅ Sent: ${sent}\n❌ Failed: ${failed}\n👥 Total: ${contacts.length}`
-    });
+      text: `📢 *Broadcast Completed!*\n\n✅ Sent: ${sent}\n❌ Failed: ${failed}\n👥 Total: ${contacts.length}`,
+    }, { quoted: null });
+
   } catch (err) {
     console.error("Broadcast error:", err);
     reply("❌ Error during broadcast:\n" + err.message);
+  }
+});
+
   }
 });
