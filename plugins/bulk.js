@@ -4,74 +4,75 @@ const config = require("../config");
 const { cmd } = require("../command");
 const { sleep } = require("../lib/functions");
 
-let lastMedia = {}; // store last media sent by owner
-
-// Hook to save last media whenever owner sends one
-cmd({
-  pattern: "saveMedia",
-  react: "💾",
-  desc: "Internal: Save last media sent by owner",
-  category: "owner",
-  filename: __filename
-}, async (conn, mek, m, { sender }) => {
-  const ownerJid = config.BOT_OWNER + "@s.whatsapp.net";
-  if (sender !== ownerJid) return;
-
-  if (m.message?.imageMessage || m.message?.videoMessage || m.message?.audioMessage || m.message?.stickerMessage) {
-    lastMedia = m.message; // store the whole media object
-    console.log("📌 Last media updated for broadcasting.");
-  }
-});
+// ───────────────────────────────────────────────
+// 📢 Broadcast Plugin (Image + Caption via Caption Command)
+// ───────────────────────────────────────────────
 
 cmd({
-  pattern: "bulk",
+  pattern: "broadcast",
+  alias: ["bc"],
   react: "📢",
-  desc: "Broadcast last media with caption to all contacts (Owner Only)",
+  desc: "Send an image + caption broadcast to all contacts (Owner only)",
   category: "owner",
   filename: __filename
-}, async (conn, mek, m, { reply, sender, args }) => {
+}, async (conn, mek, m, { reply, sender }) => {
   try {
     const ownerJid = config.BOT_OWNER + "@s.whatsapp.net";
-    if (sender !== ownerJid) return reply("❌ Only the bot owner can use this command.");
+    if (sender !== ownerJid)
+      return reply("❌ Only the bot owner can use this command.");
 
-    if (!lastMedia || Object.keys(lastMedia).length === 0) 
-      return reply("⚠️ No media found. Send an image/video/audio/sticker first.");
+    // Get image + caption from message
+    const msg = m.message?.imageMessage;
+    if (!msg)
+      return reply("📸 Please send an *image with caption* like:\n\n`.broadcast Hello everyone!`");
 
-    // Add caption if provided
-    const captionText = args.join(" ");
-    if (lastMedia.imageMessage && captionText) lastMedia.imageMessage.caption = captionText;
-    if (lastMedia.videoMessage && captionText) lastMedia.videoMessage.caption = captionText;
-    if (lastMedia.audioMessage && captionText) lastMedia.audioMessage.caption = captionText;
-    if (lastMedia.stickerMessage && captionText) lastMedia.stickerMessage.caption = captionText;
+    // Extract caption and clean it
+    const fullCaption = msg.caption || "";
+    const captionText = fullCaption.replace(/^(\.broadcast|\.bc)/i, "").trim();
+    if (!captionText)
+      return reply("⚠️ Please include a caption text after your command.");
 
-    // Load contacts
+    // Download image buffer
+    const imageBuffer = await m.download();
+
+    // Load contacts.csv
     const csvPath = path.join(__dirname, "../data/contacts.csv");
-    if (!fs.existsSync(csvPath)) return reply("❌ contacts.csv not found in /data folder.");
-    const csvData = fs.readFileSync(csvPath, "utf8");
-    const rows = csvData.split("\n").slice(1);
+    if (!fs.existsSync(csvPath))
+      return reply("❌ contacts.csv not found in /data folder.");
+
+    const csvData = fs.readFileSync(csvPath, "utf8").trim();
+    const rows = csvData.split("\n").slice(1); // skip header line
     const contacts = Array.from(
       new Set(
-        rows.map(line => line.trim().split(",")[1]).filter(num => num && /^\d{10,15}$/.test(num))
+        rows
+          .map(line => line.trim().split(",")[1])
+          .filter(num => num && /^\d{10,15}$/.test(num))
       )
     );
-    if (!contacts.length) return reply("⚠️ No valid contacts found.");
 
-    await reply(`📢 Broadcasting to *${contacts.length}* contacts...`);
+    if (!contacts.length)
+      return reply("⚠️ No valid contacts found in contacts.csv.");
 
+    await reply(`📤 Sending broadcast to *${contacts.length}* contacts...`);
+
+    let success = 0, fail = 0;
     for (let i = 0; i < contacts.length; i++) {
       const jid = contacts[i] + "@s.whatsapp.net";
       try {
-        await conn.sendMessage(jid, lastMedia);
+        await conn.sendMessage(jid, { image: imageBuffer, caption: captionText });
         console.log(`✅ Sent to ${contacts[i]}`);
-        await sleep(1200); // avoid spam flag
+        success++;
+        await sleep(1500); // delay to avoid spam
       } catch (err) {
-        console.error(`❌ Failed to send to ${contacts[i]}:`, err);
+        console.error(`❌ Failed to send to ${contacts[i]}:`, err.message);
+        fail++;
       }
     }
 
-    await reply("✅ Broadcast complete!");
+    await reply(`✅ Broadcast completed!\n\n✅ Sent: ${success}\n❌ Failed: ${fail}`);
+
   } catch (err) {
-    console.error("Bulk broadcast error:", err);
-    reply("❌ Error during broadcast:\n" + err);
+    console.error("Broadcast error:", err);
+    reply("❌ Broadcast failed:\n" + err.message);
   }
 });
