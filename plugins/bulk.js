@@ -116,6 +116,3 @@ cmd({
     reply("❌ Error during broadcast:\n" + err.message);
   }
 });
-
-  }
-});
