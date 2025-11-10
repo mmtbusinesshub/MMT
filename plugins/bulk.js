@@ -36,7 +36,7 @@ cmd({
 
     // Extract caption and clean it
     const fullCaption = msg.caption || "";
-    const captionText = fullCaption.replace(/^(\.broadcast|\.bc)/i, "").trim();
+    const captionText = fullCaption.replace(/^(\.bulk|\.crm)/i, "").trim();
     if (!captionText)
       return reply("⚠️ Please include a caption text after your command.");
 
