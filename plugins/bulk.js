@@ -9,7 +9,7 @@ const { sleep } = require("../lib/functions");
 // ───────────────────────────────────────────────
 
 cmd({
-  pattern: "bulk",
+  pattern: "broadcast",
   alias: ["bc"],
   react: "📢",
   desc: "Send an image + caption broadcast to all contacts (Owner only)",
@@ -74,13 +74,5 @@ cmd({
   } catch (err) {
     console.error("Broadcast error:", err);
     reply("❌ Broadcast failed:\n" + err.message);
-  }
-});
-
-    }, { quoted: null });
-
-  } catch (err) {
-    console.error("Broadcast error:", err);
-    reply("❌ Error during broadcast:\n" + err.message);
   }
 });
