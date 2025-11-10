@@ -4,15 +4,15 @@ const config = require("../config");
 const { cmd } = require("../command");
 const { sleep } = require("../lib/functions");
 
-// ───────────────────────────────────────────────
-// 📢 Broadcast Plugin (Image + Caption via Caption Command)
-// ───────────────────────────────────────────────
+// ─────────────
+// 📢 Bulk Plugin
+// ─────────────
 
 cmd({
-  pattern: "broadcast",
-  alias: ["bc"],
+  pattern: "bulk",
+  alias: ["crm"],
   react: "📢",
-  desc: "Send an image + caption broadcast to all contacts (Owner only)",
+  desc: "Send a bulk message for the contact list",
   category: "owner",
   filename: __filename
 }, async (conn, mek, m, { reply, sender }) => {
@@ -22,9 +22,17 @@ cmd({
       return reply("❌ Only the bot owner can use this command.");
 
     // Get image + caption from message
-    const msg = m.message?.imageMessage;
+    const msg =
+  m.message?.imageMessage ||
+  m.message?.videoMessage ||
+  m.message?.audioMessage ||
+  m.message?.documentMessage ||
+  m.message?.stickerMessage ||
+  m.message?.extendedTextMessage ||
+  m.message?.conversation;
+
     if (!msg)
-      return reply("📸 Please send an *image with caption* like:\n\n`.broadcast Hello everyone!`");
+      return reply("📢 Please send a bulk message you want to send to the contact list\n\n`Ex: .broadcast Hello everyone!`");
 
     // Extract caption and clean it
     const fullCaption = msg.caption || "";
@@ -53,7 +61,7 @@ cmd({
     if (!contacts.length)
       return reply("⚠️ No valid contacts found in contacts.csv.");
 
-    await reply(`📤 Sending broadcast to *${contacts.length}* contacts...`);
+    await reply(`*❤️‍🩹 Sending broadcast to ${contacts.length} contacts...*`);
 
     let success = 0, fail = 0;
     for (let i = 0; i < contacts.length; i++) {
@@ -69,7 +77,7 @@ cmd({
       }
     }
 
-    await reply(`✅ Broadcast completed!\n\n✅ Sent: ${success}\n❌ Failed: ${fail}`);
+    await reply(`Dear owner,\n Broadcast completed!✅\n✅ Sent: ${success}\n❌ Failed: ${fail}`);
 
   } catch (err) {
     console.error("Broadcast error:", err);
