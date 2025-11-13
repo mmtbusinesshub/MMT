@@ -81,7 +81,7 @@ cmd({
       // Better CSV parsing that handles commas in values
       const columns = row.split(',').map(col => col.trim());
       if (columns.length >= 2) {
-        const number = columns[1]; // Assuming number is in second column
+        const number = columns[0]; // Assuming number is in second column
         if (number && /^\d{10,15}$/.test(number)) {
           contacts.push(number);
         }
