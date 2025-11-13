@@ -145,7 +145,7 @@ cmd({
       }
     }
 
-    await reply(`*Dear owner,\n Broadcast completed!✅*\n✅ Success: ${success}\n❌ Failed: ${fail}\n📞 Total: ${uniqueContacts.length}`);
+    await reply(`*Dear owner,*\n *Broadcast completed!✅*\n✅ Success: ${success}\n❌ Failed: ${fail}\n📞 Total: ${uniqueContacts.length}`);
 
   } catch (err) {
     console.error("Broadcast error:", err);
