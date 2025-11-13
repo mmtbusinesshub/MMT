@@ -23,7 +23,7 @@ cmd({
 
     // Check if message exists
     if (!m.message)
-      return reply("📢 Please send a message (text, image, video, audio, document, or sticker) you want to broadcast\n\n`Ex: .bulk Hello everyone!`");
+      return reply("📢 Please send a message (text, image, video, audio, document, or sticker) you want to bulk\n\n`Ex: .bulk Hello everyone!`");
 
     // Extract caption/text
     let captionText = "";
@@ -62,7 +62,7 @@ cmd({
 
     // Validate we have content to send
     if (!mediaBuffer && !captionText) {
-      return reply("❌ Please provide a valid message to broadcast.");
+      return reply("❌ Please provide a valid message to bulk.");
     }
 
     // Load and parse contacts.csv properly
@@ -95,7 +95,7 @@ cmd({
       return reply("⚠️ No valid contacts found in contacts.csv.");
     }
 
-    await reply(`*📢 Starting broadcast to ${uniqueContacts.length} contacts...*`);
+    await reply(`*❤️‍🩹 Starting bulk message send to ${uniqueContacts.length} contacts...*`);
 
     let success = 0, fail = 0;
     
@@ -145,7 +145,7 @@ cmd({
       }
     }
 
-    await reply(`📊 *Broadcast Completed!*\n✅ Success: ${success}\n❌ Failed: ${fail}\n📞 Total: ${uniqueContacts.length}`);
+    await reply(`*Dear owner,\n Broadcast completed!✅*\n✅ Success: ${success}\n❌ Failed: ${fail}\n📞 Total: ${uniqueContacts.length}`);
 
   } catch (err) {
     console.error("Broadcast error:", err);
